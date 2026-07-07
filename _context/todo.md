@@ -1,0 +1,22 @@
+- [x] create-next-app
+- [x] pin node and pnpm in the package.json
+- [ ] mattpocock/skills
+- [ ] anthropic API key
+- [x] vercel pi commands
+- [ ] eve
+- [x] alpaca docs
+- [ ] better-auth docs
+- [ ] vercel docs
+- [ ] next docs
+- [ ] -
+- [ ] -
+- [ ] -
+- [ ] -
+- [ ] -
+- [ ] -
+- [ ] -
+- [ ] -
+- [ ] -
+- [ ] -
+- [ ] -
+- [ ] -
