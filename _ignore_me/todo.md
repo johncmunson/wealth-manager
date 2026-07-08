@@ -12,7 +12,7 @@
 - [x] plaid docs
 - [ ] neon docs
 - [ ] vitest / node:test
-- [ ] -
+- [x] shadcn skill + boilerplate
 - [ ] -
 - [ ] -
 - [ ] -
