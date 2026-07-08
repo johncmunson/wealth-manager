@@ -11,7 +11,7 @@
 - [ ] next docs
 - [x] plaid docs
 - [ ] neon docs
-- [ ] -
+- [ ] vitest / node:test
 - [ ] -
 - [ ] -
 - [ ] -
