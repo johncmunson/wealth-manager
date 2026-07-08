@@ -3,13 +3,14 @@
 - [ ] mattpocock/skills
 - [ ] anthropic API key
 - [x] vercel pi commands
-- [ ] eve
+- [x] eve skill
+- [ ] json-render docs/skill
 - [x] alpaca docs
 - [ ] better-auth docs
 - [ ] vercel docs
 - [ ] next docs
-- [ ] -
-- [ ] -
+- [x] plaid docs
+- [ ] neon docs
 - [ ] -
 - [ ] -
 - [ ] -
