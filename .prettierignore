@@ -1,0 +1,12 @@
+/.agents
+/.claude
+/.cursor
+/components/ui
+pnpm-lock.yaml
+/context
+/_context
+/vendor
+/db/migrations
+/.pi
+/.next
+/_ignore_me
