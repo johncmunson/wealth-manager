@@ -1,7 +1,7 @@
-import { Pool } from "pg";
-import { drizzle } from "drizzle-orm/node-postgres";
-import { attachDatabasePool } from "@vercel/functions";
-import * as schema from "./schema";
+import { Pool } from "pg"
+import { drizzle } from "drizzle-orm/node-postgres"
+import { attachDatabasePool } from "@vercel/functions"
+import * as schema from "./schema"
 
 /**
  * ──────────────────────────────────────────────────────────────────────────────
@@ -63,17 +63,15 @@ import * as schema from "./schema";
  *    https://neon.com/docs/connect/connect-intro
  */
 
-const databaseUrl = process.env.DATABASE_URL;
+const databaseUrl = process.env.DATABASE_URL
 
 if (!databaseUrl) {
-  throw new Error(
-    "DATABASE_URL is required to initialize the database client.",
-  );
+  throw new Error("DATABASE_URL is required to initialize the database client.")
 }
 
 // Environment flags. This project uses only: development, production, test.
-const isProduction = process.env.NODE_ENV === "production";
-const isLocalLike = !isProduction;
+const isProduction = process.env.NODE_ENV === "production"
+const isLocalLike = !isProduction
 
 /**
  * In development and test, we cache the Pool on globalThis to survive local
@@ -81,36 +79,36 @@ const isLocalLike = !isProduction;
  * instance lifetime is managed by the platform.
  */
 const globalForDb = globalThis as unknown as {
-  databasePostgresPool?: Pool;
-  databaseDrizzleDb?: unknown;
-};
+  databasePostgresPool?: Pool
+  databaseDrizzleDb?: unknown
+}
 
 const poolErrorHandlerAttached = Symbol.for(
   "database.postgres.poolErrorHandlerAttached",
-);
+)
 
 type PoolWithErrorHandlerMarker = Pool & {
-  [poolErrorHandlerAttached]?: true;
-};
+  [poolErrorHandlerAttached]?: true
+}
 
 // pg emits "error" when an idle client disconnects unexpectedly. In local dev
 // the Pool survives HMR reloads, so mark the Pool itself to avoid registering
 // duplicate listeners across module instances.
 function attachPoolErrorHandler(pool: Pool) {
-  const markedPool = pool as PoolWithErrorHandlerMarker;
+  const markedPool = pool as PoolWithErrorHandlerMarker
 
   if (markedPool[poolErrorHandlerAttached]) {
-    return;
+    return
   }
 
   pool.on("error", (error) => {
     console.warn(
       "Postgres pool idle client error. The client was removed from the pool and future queries will open a fresh connection.",
       error,
-    );
-  });
+    )
+  })
 
-  markedPool[poolErrorHandlerAttached] = true;
+  markedPool[poolErrorHandlerAttached] = true
 }
 
 /**
@@ -137,9 +135,9 @@ const pool =
     connectionString: databaseUrl,
     max: isProduction ? 10 : 5,
     idleTimeoutMillis: isProduction ? 5000 : 1000,
-  });
+  })
 
-attachPoolErrorHandler(pool);
+attachPoolErrorHandler(pool)
 
 /**
  * Production (Vercel Fluid compute):
@@ -152,7 +150,7 @@ attachPoolErrorHandler(pool);
  *   caching outside of production.
  */
 if (isProduction) {
-  attachDatabasePool(pool);
+  attachDatabasePool(pool)
 }
 
 /**
@@ -169,7 +167,7 @@ if (isProduction) {
  * with an undefined SQL name. The wrapper is cheap, while the Pool is the
  * expensive object we need to preserve.
  */
-const db = drizzle(pool, { schema, casing: "snake_case" });
+const db = drizzle(pool, { schema, casing: "snake_case" })
 
 /**
  * DEVELOPMENT / TEST POOL CACHING
@@ -180,8 +178,8 @@ const db = drizzle(pool, { schema, casing: "snake_case" });
  *   connections without preserving Drizzle's schema-derived caches.
  */
 if (isLocalLike) {
-  globalForDb.databasePostgresPool = pool;
-  delete globalForDb.databaseDrizzleDb;
+  globalForDb.databasePostgresPool = pool
+  delete globalForDb.databaseDrizzleDb
 }
 
 /**
@@ -198,4 +196,4 @@ if (isLocalLike) {
  *   migrations, regardless of provider, to avoid pooling mode quirks.
  */
 
-export { db, pool };
+export { db, pool }
