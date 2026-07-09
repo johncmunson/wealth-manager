@@ -43,3 +43,5 @@ curl -fsS --max-time 10 --max-filesize 40000 \
 - **Never** mutate any of the foundational shadcn/ui components inside of `components/ui`
 - If you ever need to run or execute Python, the command is `python3` and not `python`
 - **Never** write db migrations manually. Instead, modify the db schema in `db/schema/` and then run `pnpm db:generate`. Sometimes it's okay to apply db migrations yourself using `pnpm db:migrate` and sometimes it's not. You'll need to use your best judgement and assess the risk. When in doubt, leave this to the user.
+
+:)
