@@ -41,3 +41,5 @@ curl -fsS --max-time 10 --max-filesize 40000 \
 - The better-auth agent skills might mention URLs like this, `https://better-auth.com/docs/concepts/hooks`. However, `https://better-auth.com/docs` is not an LLM-friendly base URL. Use `https://better-auth.com/llms.txt/docs` as the base URL instead, e.g. `https://better-auth.com/llms.txt/docs/concepts/hooks`.
 - When building frontend UI components and pages, **always** seek to leverage shadcn/ui components as the foundation
 - **Never** mutate any of the foundational shadcn/ui components inside of `components/ui`
+- If you ever need to run or execute Python, the command is `python3` and not `python`
+- **Never** write db migrations manually. Instead, modify the db schema in `db/schema/` and then run `pnpm db:generate`. Sometimes it's okay to apply db migrations yourself using `pnpm db:migrate` and sometimes it's not. You'll need to use your best judgement and assess the risk. When in doubt, leave this to the user.
