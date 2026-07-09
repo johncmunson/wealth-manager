@@ -14,9 +14,14 @@
     "typecheck": "next typegen && tsc --noEmit",
     "format": "prettier --write .",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
-    "db:push": "drizzle-kit push",
-    "db:check": "drizzle-kit check"
+    "db:migrate": "NODE_ENV=development drizzle-kit migrate",
+    "db:migrate:staging": "NODE_ENV=production APP_ENV=staging drizzle-kit migrate",
+    "db:migrate:prod": "NODE_ENV=production drizzle-kit migrate",
+    "db:push": "NODE_ENV=development drizzle-kit push",
+    "db:push:staging": "NODE_ENV=production APP_ENV=staging drizzle-kit push",
+    "db:check": "NODE_ENV=development drizzle-kit check",
+    "db:check:staging": "NODE_ENV=production APP_ENV=staging drizzle-kit check",
+    "db:check:prod": "NODE_ENV=production drizzle-kit check"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

@@ -10,9 +10,10 @@ import * as schema from "./schema"
  * This module creates or reuses a pg Pool, creates a fresh Drizzle wrapper for
  * the current module instance, and exports both.
  *
- * It has runtime branches keyed by NODE_ENV. This project supports
- * development, test, production, and staging; staging is treated as production
- * for database client behavior.
+ * It has runtime branches keyed by standard NODE_ENV values: development,
+ * test, and production. Staging is not a NODE_ENV value; staging deploys run
+ * with NODE_ENV=production and APP_ENV=staging, so they receive the same
+ * database client behavior as production.
  *
  * 1) DEVELOPMENT (Next.js dev server)
  *    - HMR reloads modules on file changes. Without care, each reload would
@@ -70,9 +71,9 @@ if (!databaseUrl) {
   throw new Error("DATABASE_URL is required to initialize the database client.")
 }
 
-// Environment flags. Staging intentionally behaves like production here.
-const nodeEnv: string | undefined = process.env.NODE_ENV
-const isProductionLike = nodeEnv === "production" || nodeEnv === "staging"
+// Environment flags. Staging intentionally behaves like production here because
+// it runs with NODE_ENV=production and APP_ENV=staging.
+const isProductionLike = process.env.NODE_ENV === "production"
 const isLocalLike = !isProductionLike
 
 /**
