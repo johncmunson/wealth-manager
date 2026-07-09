@@ -13,7 +13,7 @@
 - [ ] neon docs
 - [ ] vitest / node:test
 - [x] shadcn skill + boilerplate
-- [ ] -
+- [ ] resend
 - [ ] -
 - [ ] -
 - [ ] -
