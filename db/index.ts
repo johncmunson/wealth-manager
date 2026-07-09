@@ -10,8 +10,9 @@ import * as schema from "./schema"
  * This module creates or reuses a pg Pool, creates a fresh Drizzle wrapper for
  * the current module instance, and exports both.
  *
- * It has two runtime branches keyed by NODE_ENV. This project intentionally only
- * uses the standard NODE_ENV values: development, production, and test.
+ * It has runtime branches keyed by NODE_ENV. This project supports
+ * development, test, production, and staging; staging is treated as production
+ * for database client behavior.
  *
  * 1) DEVELOPMENT (Next.js dev server)
  *    - HMR reloads modules on file changes. Without care, each reload would
@@ -27,16 +28,16 @@ import * as schema from "./schema"
  *      Fluid cleanup hook.
  *    - Ensure DATABASE_URL points at a dedicated test database when tests run.
  *
- * 3) PRODUCTION (live deployed app on Vercel Fluid Compute)
+ * 3) PRODUCTION / STAGING (deployed app on Vercel Fluid Compute)
  *    - Modules do not hot-reload. Each instance holds one Pool in memory.
  *    - We call attachDatabasePool(pool) so Fluid can close idle clients cleanly
  *      before the instance is suspended, preventing "leaked" connections.
  *
  * Pool sizing:
- *  - max:   modest numbers (10 in production, 5 elsewhere) to avoid stampeding
+ *  - max:   modest numbers (10 in production/staging, 5 elsewhere) to avoid stampeding
  *           the DB, yet allow concurrency per instance.
  *  - idleTimeoutMillis:
- *           short (5s in production, 1s in development/test) so unused clients
+ *           short (5s in production/staging, 1s in development/test) so unused clients
  *           are recycled quickly; this works well with Fluid's lifecycle + the
  *           attach helper.
  *
@@ -69,13 +70,14 @@ if (!databaseUrl) {
   throw new Error("DATABASE_URL is required to initialize the database client.")
 }
 
-// Environment flags. This project uses only: development, production, test.
-const isProduction = process.env.NODE_ENV === "production"
-const isLocalLike = !isProduction
+// Environment flags. Staging intentionally behaves like production here.
+const nodeEnv: string | undefined = process.env.NODE_ENV
+const isProductionLike = nodeEnv === "production" || nodeEnv === "staging"
+const isLocalLike = !isProductionLike
 
 /**
  * In development and test, we cache the Pool on globalThis to survive local
- * module reloads. In production, we don't cache: there is no HMR, and the
+ * module reloads. In production/staging, we don't cache: there is no HMR, and the
  * instance lifetime is managed by the platform.
  */
 const globalForDb = globalThis as unknown as {
@@ -116,13 +118,13 @@ function attachPoolErrorHandler(pool: Pool) {
  *
  * Why these values?
  * - max:
- *   - production: 10 -> allows per-instance concurrency without overwhelming the DB.
+ *   - production/staging: 10 -> allows per-instance concurrency without overwhelming the DB.
  *     Fluid can run multiple concurrent requests on one instance; 10 is a sane,
  *     conservative starting point that you can tune later.
  *   - development/test: 5 -> lighter usage; keep it small to avoid noisy neighbors.
  *
  * - idleTimeoutMillis:
- *   - production: 5000 ms -> short enough to free idle clients quickly (good for
+ *   - production/staging: 5000 ms -> short enough to free idle clients quickly (good for
  *     elasticity) but long enough to allow rapid reuse under bursty traffic.
  *   - development/test: 1000 ms -> quick recycle during local runs; keeps things
  *     snappy and avoids connection accumulation during frequent restarts.
@@ -133,23 +135,23 @@ const pool =
   globalForDb.databasePostgresPool ??
   new Pool({
     connectionString: databaseUrl,
-    max: isProduction ? 10 : 5,
-    idleTimeoutMillis: isProduction ? 5000 : 1000,
+    max: isProductionLike ? 10 : 5,
+    idleTimeoutMillis: isProductionLike ? 5000 : 1000,
   })
 
 attachPoolErrorHandler(pool)
 
 /**
- * Production (Vercel Fluid compute):
+ * Production / staging (Vercel Fluid compute):
  * - attachDatabasePool integrates the pool lifecycle with Fluid.
  * - It ensures idle connections are properly closed before the instance is
  *   suspended, preventing the classic "serverless leaked connections" issue.
  *
  * Development / test:
  * - We skip it. HMR and repeated local imports are handled by globalThis Pool
- *   caching outside of production.
+ *   caching outside of production-like environments.
  */
-if (isProduction) {
+if (isProductionLike) {
   attachDatabasePool(pool)
 }
 
