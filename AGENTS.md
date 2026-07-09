@@ -35,3 +35,9 @@ curl -fsS --max-time 10 --max-filesize 40000 \
 ```
 
 > Minor caveat: when head stops early, curl may notice the pipe closed and print a harmless “failure writing output” error.
+
+## Misc. Notes
+
+- The better-auth agent skills might mention URLs like this, `https://better-auth.com/docs/concepts/hooks`. However, `https://better-auth.com/docs` is not an LLM-friendly base URL. Use `https://better-auth.com/llms.txt/docs` as the base URL instead, e.g. `https://better-auth.com/llms.txt/docs/concepts/hooks`.
+- When building frontend UI components and pages, **always** seek to leverage shadcn/ui components as the foundation
+- **Never** mutate any of the foundational shadcn/ui components inside of `components/ui`
