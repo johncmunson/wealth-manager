@@ -90,7 +90,9 @@ export function AppSidebar() {
               {navItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
+                    size="lg"
                     tooltip={item.title}
+                    className="text-base [&>svg]:size-5"
                     render={
                       <Link href={item.href}>
                         <item.icon />
