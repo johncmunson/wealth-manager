@@ -92,7 +92,7 @@ export function AppSidebar() {
                   <SidebarMenuButton
                     size="lg"
                     tooltip={item.title}
-                    className="text-base [&>svg]:size-5"
+                    className="bg-sidebar-accent text-base hover:bg-sidebar-accent-hover [&>svg]:size-5"
                     render={
                       <Link href={item.href}>
                         <item.icon />
