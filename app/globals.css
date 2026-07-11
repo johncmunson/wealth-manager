@@ -46,6 +46,9 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+  /* user-defined values */
+  --color-success: var(--success);
+  --color-warning: var(--warning);
 }
 
 :root {
@@ -81,6 +84,9 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+  /* user-defined values */
+  --success: oklch(0.48 0.14 150);
+  --warning: oklch(0.58 0.14 70);
 }
 
 .dark {
@@ -115,6 +121,9 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+  /* user-defined values */
+  --success: oklch(0.72 0.16 150);
+  --warning: oklch(0.78 0.14 75);
 }
 
 @layer base {
