@@ -58,7 +58,15 @@ The shared helpers in `lib/databaseTarget.ts` resolve and enforce the expected t
 - rejects endpoints belonging to another environment or any unknown host; and
 - fails before Drizzle connects or a reset script imports the database pool.
 
-The environment-agnostic `scripts/reset-db.ts` powers `db:reset`, `db:reset:test`, and `db:reset:staging`. It validates the selected endpoint before connecting and refuses production resets entirely. Cleanup must additionally remain scoped to resources owned by the current test run. The database name and `NODE_ENV=test` are not sufficient proof that a database is safe to modify. Passwords and full connection URLs remain secret, but endpoint hostnames in the allowlist need not be.
+The environment-agnostic `scripts/reset-db.ts` powers `db:reset`, `db:reset:test`, and `db:reset:staging`. It validates the selected endpoint before connecting and refuses production resets entirely. The database name and `NODE_ENV=test` are not sufficient proof that a database is safe to modify. Passwords and full connection URLs remain secret, but endpoint hostnames in the allowlist need not be.
+
+### Shared test endpoint lifecycle
+
+This project intentionally uses one Neon endpoint dedicated exclusively to automated tests. Local database-backed commands run one at a time and may recreate that endpoint's `public` and migration schemas before applying generated migrations. “Test-owned” refers to this dedicated endpoint; it does not require a new database or schema for every invocation.
+
+Separate integration, route, and E2E commands must not be run concurrently against the shared endpoint. Tests within one prepared suite should use unique records and targeted cleanup rather than dropping schemas or broadly truncating tables. This is an operational constraint of the current local-only workflow, not a requirement to implement per-run or per-worker database provisioning.
+
+If the project later introduces CI, sharding, overlapping database-backed commands, or multiple developers sharing the test endpoint, add cross-process locking or isolated database/schema targets before enabling that concurrency.
 
 ## Expected files
 

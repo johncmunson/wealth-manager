@@ -7,8 +7,8 @@ import * as schema from "./schema"
  * ──────────────────────────────────────────────────────────────────────────────
  * DB INITIALIZATION STRATEGY
  * ──────────────────────────────────────────────────────────────────────────────
- * This module creates or reuses a pg Pool, creates a fresh Drizzle wrapper for
- * the current module instance, and exports both.
+ * This module creates a pg Pool (or reuses one during development), creates a
+ * fresh Drizzle wrapper for the current module instance, and exports both.
  *
  * It has runtime branches keyed by standard NODE_ENV values: development,
  * test, and production. Staging is not a NODE_ENV value; staging deploys run
@@ -25,8 +25,10 @@ import * as schema from "./schema"
  *
  * 2) TEST (automated tests)
  *    - NODE_ENV is typically "test".
- *    - Tests use the same Pool cache as local development and skip the Vercel
- *      Fluid cleanup hook.
+ *    - Each isolated Vitest file gets a Pool owned by that file's module graph;
+ *      tests do not cache Pools on globalThis because workers can outlive files.
+ *    - The database setup file closes that Pool in its file-scoped afterAll hook.
+ *    - Tests skip the Vercel Fluid cleanup hook.
  *    - Ensure DATABASE_URL points at a dedicated test database when tests run.
  *
  * 3) PRODUCTION / STAGING (deployed app on Vercel Fluid Compute)
@@ -74,12 +76,13 @@ if (!databaseUrl) {
 // Environment flags. Staging intentionally behaves like production here because
 // it runs with NODE_ENV=production and APP_ENV=staging.
 const isProductionLike = process.env.NODE_ENV === "production"
-const isLocalLike = !isProductionLike
+const isDevelopment = process.env.NODE_ENV === "development"
 
 /**
- * In development and test, we cache the Pool on globalThis to survive local
- * module reloads. In production/staging, we don't cache: there is no HMR, and the
- * instance lifetime is managed by the platform.
+ * In development, cache the Pool on globalThis so it survives HMR module
+ * reloads. Tests intentionally do not use this cache: Vitest setup hooks are
+ * file-scoped, while a worker's globalThis can survive between isolated files.
+ * Production/staging instances rely on the platform-managed lifecycle instead.
  */
 const globalForDb = globalThis as unknown as {
   databasePostgresPool?: Pool
@@ -133,7 +136,7 @@ function attachPoolErrorHandler(pool: Pool) {
  * Note: These are sensible defaults, not absolutes. Monitor and tune as needed.
  */
 const pool =
-  globalForDb.databasePostgresPool ??
+  (isDevelopment ? globalForDb.databasePostgresPool : undefined) ??
   new Pool({
     connectionString: databaseUrl,
     max: isProductionLike ? 10 : 5,
@@ -148,9 +151,13 @@ attachPoolErrorHandler(pool)
  * - It ensures idle connections are properly closed before the instance is
  *   suspended, preventing the classic "serverless leaked connections" issue.
  *
- * Development / test:
- * - We skip it. HMR and repeated local imports are handled by globalThis Pool
- *   caching outside of production-like environments.
+ * Development:
+ * - We skip it. HMR and repeated local imports are handled by the globalThis
+ *   Pool cache.
+ *
+ * Test:
+ * - We skip it. Each isolated test file owns its Pool, which the database setup
+ *   closes in that file's afterAll hook.
  */
 if (isProductionLike) {
   attachDatabasePool(pool)
@@ -173,14 +180,15 @@ if (isProductionLike) {
 const db = drizzle(pool, { schema, casing: "snake_case" })
 
 /**
- * DEVELOPMENT / TEST POOL CACHING
+ * DEVELOPMENT POOL CACHING
  * - Next.js dev server hot-reloads files on save.
  * - Without this cache, every reload would construct a new Pool -> more TCP
  *   connections -> potential "too many connections".
- * - By stashing the Pool on globalThis, subsequent imports reuse the same
- *   connections without preserving Drizzle's schema-derived caches.
+ * - By stashing the Pool on globalThis, subsequent development imports reuse
+ *   the same connections without preserving Drizzle's schema-derived caches.
+ * - Tests must not populate this cache because their teardown is file-scoped.
  */
-if (isLocalLike) {
+if (isDevelopment) {
   globalForDb.databasePostgresPool = pool
   delete globalForDb.databaseDrizzleDb
 }

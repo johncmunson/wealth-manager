@@ -1,6 +1,7 @@
 import { readFileSync, statSync } from "node:fs"
 import path from "node:path"
 import { loadEnvConfig, processEnv, type LoadedEnvFiles } from "@next/env"
+import { assertValidEnvironmentCombination } from "./databaseTarget"
 
 // If you need to load environment variables outside of the Next.js runtime,
 // such as in a root config file for an ORM or test runner...
@@ -32,6 +33,8 @@ function loadCustomEnv(files: string[]) {
 
   processEnv(loadedEnvFiles, projectDir)
 }
+
+assertValidEnvironmentCombination()
 
 if (process.env.APP_ENV === "staging") {
   // Enables running db migrations against the staging database from a local machine, e.g. `pnpm db:migrate:staging`

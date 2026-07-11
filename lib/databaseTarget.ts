@@ -5,6 +5,19 @@ type DatabaseEnvironment = {
   NODE_ENV?: string
 }
 
+export function assertValidEnvironmentCombination(
+  environment: DatabaseEnvironment = process.env,
+): void {
+  if (
+    environment.APP_ENV === "staging" &&
+    environment.NODE_ENV !== "production"
+  ) {
+    throw new Error(
+      "Refusing database operation: APP_ENV=staging requires NODE_ENV=production.",
+    )
+  }
+}
+
 const databaseHosts: Record<DatabaseTarget, ReadonlySet<string>> = {
   development: new Set([
     "ep-young-hill-adjj74g1-pooler.c-2.us-east-1.aws.neon.tech",
@@ -27,6 +40,8 @@ const databaseHosts: Record<DatabaseTarget, ReadonlySet<string>> = {
 export function getDatabaseTarget(
   environment: DatabaseEnvironment = process.env,
 ): DatabaseTarget {
+  assertValidEnvironmentCombination(environment)
+
   if (environment.APP_ENV === "staging") {
     return "staging"
   }

@@ -45,3 +45,4 @@ curl -fsS --max-time 10 --max-filesize 40000 \
 - **Never** write db migrations manually. Instead, modify the db schema in `db/schema/` and then run `pnpm db:generate`. Sometimes it's okay to apply db migrations yourself using `pnpm db:migrate` and sometimes it's not. You'll need to use your best judgement and assess the risk. When in doubt, leave this to the user.
 - At this time, we do not intend to use Plaid. It should be simple enough to fund sandbox Alpaca Brokerage accounts without using Plaid.
 - Never use `--watch` when running tests. That is for the user to run only.
+- This project does not use CI. All testing, linting, and other checks are performed locally.
