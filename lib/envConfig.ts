@@ -34,7 +34,8 @@ function loadCustomEnv(files: string[]) {
 }
 
 if (process.env.APP_ENV === "staging") {
-  loadCustomEnv([".env.staging.local", ".env.local", ".env.staging", ".env"])
+  // Enables running db migrations against the staging database from a local machine, e.g. `pnpm db:migrate:staging`
+  loadCustomEnv([".env.staging.local", ".env.staging"])
 } else {
   loadEnvConfig(projectDir, process.env.NODE_ENV === "development")
 }

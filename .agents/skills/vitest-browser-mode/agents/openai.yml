@@ -1,0 +1,4 @@
+interface:
+  display_name: "Vitest Browser Mode"
+  short_description: "Configure Vitest Browser Mode and write real-browser component, interaction, and visual regression tests."
+  default_prompt: "Use this skill to decide when Browser Mode is appropriate, configure providers and projects, and write or review tests built on vitest/browser APIs."
