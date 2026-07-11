@@ -74,7 +74,7 @@ export function AppSidebar() {
           <SidebarInput
             id="investment-search"
             placeholder="Search Investments..."
-            className="pl-8"
+            className="h-9 pl-8"
           />
         </div>
 
