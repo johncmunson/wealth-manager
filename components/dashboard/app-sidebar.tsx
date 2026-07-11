@@ -31,7 +31,6 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarInput,
   SidebarMenu,
@@ -79,12 +78,13 @@ export function AppSidebar() {
           />
         </div>
 
-        <Button className="w-full font-bold">Trade</Button>
+        <Button size="lg" className="w-full text-base font-bold">
+          Trade
+        </Button>
       </SidebarHeader>
 
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Navigation</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {navItems.map((item) => (
