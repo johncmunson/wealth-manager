@@ -26,6 +26,13 @@ export default defineConfig({
   test: {
     projects: [
       {
+        resolve: {
+          alias: {
+            "server-only": fileURLToPath(
+              new URL("./tests/setup/server-only.ts", import.meta.url),
+            ),
+          },
+        },
         test: {
           ...sharedTestOptions,
           name: "unit-server",

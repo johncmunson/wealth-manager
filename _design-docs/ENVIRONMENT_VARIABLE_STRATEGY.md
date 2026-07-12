@@ -13,6 +13,7 @@ Use Next.js conventions wherever possible, with one narrow exception: local data
 5. Only variables intentionally exposed to browsers use `NEXT_PUBLIC_`. Secrets never use `NEXT_PUBLIC_` or `VITE_`.
 6. Existing process variables take precedence over files, allowing CI and hosting platforms to inject configuration explicitly.
 7. Missing credentials must fail loudly; one environment must never silently fall back to another environment's credential file.
+8. Alpaca Broker API credentials (`ALPACA_BROKER_CLIENT_ID` and `ALPACA_BROKER_CLIENT_SECRET`) are server-only sensitive values. All application environments currently use sandbox endpoints defined as code constants; `NODE_ENV` and `APP_ENV` do not select Alpaca endpoints or credentials.
 
 ## Sources by environment
 
@@ -28,6 +29,8 @@ Use Next.js conventions wherever possible, with one narrow exception: local data
 | Local production DB tooling | `production`                    | `.env.production.local`                                                  | Reserved for explicit production migration/check commands and treated as high risk.                         |
 
 All real `*.local` files are ignored by Git. Matching `*.example` files document required keys without containing secrets.
+
+Alpaca credentials for local application development are documented only in `.env.local.example`. Deployed preview/staging/production values must be configured as Vercel sensitive environment variables (preferably separate credentials when BrokerDash permits). Do not add Alpaca or other application secrets to `.env.staging.local.example` or `.env.production.local.example`; those files are reserved for explicit local database tooling.
 
 ## Tool behavior
 
