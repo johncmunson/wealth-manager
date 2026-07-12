@@ -36,6 +36,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
+  SidebarSeparator,
 } from "@/components/ui/sidebar"
 
 const navItems = [
@@ -56,7 +57,7 @@ export function AppSidebar() {
           <span className="text-xl font-semibold">Wealth Manager</span>
         </div>
 
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-3">
           <Label htmlFor="search" className="sr-only">
             Search Investments
           </Label>
@@ -72,10 +73,12 @@ export function AppSidebar() {
         </div>
       </SidebarHeader>
 
+      <SidebarSeparator className="my-4" />
+
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupContent>
-            <SidebarMenu>
+            <SidebarMenu className="gap-1">
               {navItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
