@@ -8,4 +8,3 @@ The following notes may be helpful to the agent working on the next ticket, `02 
 - Do not expose or accept account/relationship IDs client-side. `getFundingSnapshot()` derives ownership from the session and database.
 - `FundingOverview` already supports `ready`, `preparing`, `missing`, and `unavailable`; issue 02 mainly needs the Prepare action and pending/error interaction.
 - Code review found synthetic relationship selection and source-error announcements initially weak; both were fixed and covered by tests.
-- Manual browser verification redirected to sign-in because the saved browser profile was no longer authenticated. Automated suites all passed.
