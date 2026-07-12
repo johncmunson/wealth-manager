@@ -4,17 +4,7 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useState } from "react"
 
-import {
-  Activity,
-  ChevronsUpDown,
-  DollarSign,
-  Gem,
-  LayoutDashboard,
-  LogOut,
-  Search,
-  Settings,
-  Target,
-} from "lucide-react"
+import { ChevronsUpDown, Gem, LogOut, Search, Settings } from "lucide-react"
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { authClient } from "@/lib/auth-client"
@@ -29,6 +19,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Label } from "@/components/ui/label"
+import { appNavItems, isAppRouteActive } from "@/lib/app-navigation"
 import {
   Sidebar,
   SidebarContent,
@@ -43,13 +34,6 @@ import {
   SidebarRail,
   SidebarSeparator,
 } from "@/components/ui/sidebar"
-
-const navItems = [
-  { title: "Portfolio", href: "/app/portfolio", icon: LayoutDashboard },
-  { title: "Strategy", href: "/app/strategy", icon: Target },
-  { title: "Activity", href: "/app/activity", icon: Activity },
-  { title: "Funding", href: "/app/funding", icon: DollarSign },
-]
 
 export function AppSidebar() {
   const pathname = usePathname()
@@ -96,11 +80,11 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu className="gap-1">
-              {navItems.map((item) => (
+              {appNavItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     render={<Link href={item.href} />}
-                    isActive={pathname === item.href}
+                    isActive={isAppRouteActive(pathname, item.href)}
                     size="lg"
                     className="text-base [&>svg]:size-5"
                   >

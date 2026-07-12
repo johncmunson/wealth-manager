@@ -4,17 +4,11 @@ import { usePathname } from "next/navigation"
 
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
-
-const routeTitles: Record<string, string> = {
-  "/app/portfolio": "Portfolio",
-  "/app/strategy": "Strategy",
-  "/app/activity": "Activity",
-  "/app/funding": "Funding",
-}
+import { getAppNavItem } from "@/lib/app-navigation"
 
 export function AppHeader() {
   const pathname = usePathname()
-  const title = routeTitles[pathname] ?? "Wealth Manager"
+  const title = getAppNavItem(pathname)?.title ?? "Wealth Manager"
 
   return (
     <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
