@@ -12,15 +12,15 @@
 - [ ] Unlike deposits, withdrawals permit cents.
 - [ ] The Server Action authenticates independently and derives the Brokerage Account and ACH Relationship from trusted server state.
 - [ ] Immediately before mutation, the backend fetches current Alpaca account details and rejects an amount above current Withdrawable Cash.
-- [ ] The Server Action rechecks Funding Source approval and current Alpaca withdrawal/account restrictions immediately before mutation.
+- [ ] The Server Action rechecks Funding Source approval and the Trading Account's global `transfers_blocked` state immediately before mutation.
 - [ ] Withdrawals are submitted to Alpaca as one-time outgoing ACH Transfers.
-- [ ] Deposit and withdrawal restrictions operate independently, so a blocked direction does not disable the other direction.
+- [ ] Because Alpaca does not expose `withdrawable_status` in the Trading Account schema, a direction-specific `403` rejection is surfaced after submission rather than predicted in the UI.
 - [ ] The submit control remains disabled while pending, and the UI does not optimistically adjust cash or add a Transfer.
 - [ ] A successful submission refreshes current cash values and recent Transfers in the same interaction.
 - [ ] Definitive Alpaca rejection is distinguished from an ambiguous outcome and presented accessibly.
 - [ ] Authentication failures, timeouts, unreadable responses, and other ambiguous outcomes are never automatically replayed.
 - [ ] An ambiguous result states that the outcome is unknown and refreshes recent Transfer history once so the User can verify before trying again.
 - [ ] Transfer cancellation, reversal, editing, scheduling, and local persistence remain absent.
-- [ ] Server-unit tests cover cent precision, malformed amounts, stale client values, current Withdrawable Cash enforcement, restrictions, authorization, success, definitive failures, ambiguous outcomes, and no replay.
+- [ ] Server-unit tests cover cent precision, malformed amounts, stale client values, current Withdrawable Cash enforcement, global Transfer blocking, direction-specific `403` rejection, authorization, success, definitive failures, ambiguous outcomes, and no replay.
 - [ ] Browser-component tests cover withdrawal dialog focus, keyboard operation, cent validation, available-cash feedback, review content, confirmation, pending protection, success, and errors.
 - [ ] A manual Alpaca sandbox acceptance pass verifies one decimal withdrawal within Withdrawable Cash and confirms the refreshed balance and recent Transfer.

@@ -47,8 +47,8 @@ Alpaca remains the source of truth. Wealth Manager will read current state on pa
 31. As a User, I want deposits displayed as positive amounts and withdrawals as negative amounts, so that direction is visually clear.
 32. As a User, I want pending, completed, rejected, canceled, and other Alpaca statuses represented honestly, so that Wealth Manager does not invent a conflicting lifecycle.
 33. As a User, I want to refresh balances and Transfer statuses manually, so that I can check for changes without reloading the entire browser tab.
-34. As a User whose deposits are blocked by Alpaca, I want only the deposit action disabled with an explanation, so that I understand the restriction.
-35. As a User whose withdrawals are blocked by Alpaca, I want only the withdrawal action disabled with an explanation, so that unaffected Funding capabilities remain available.
+34. As a User whose Brokerage Account has Transfers blocked, I want both Transfer actions disabled with an explanation, so that I understand the account restriction.
+35. As a User whose specific deposit or withdrawal is rejected by Alpaca, I want a clear direction-specific error, so that I understand why that request was not permitted.
 36. As a User whose Brokerage Account is still pending Provisioning, I want a status-specific unavailable state, so that I understand why Funding cannot load.
 37. As a User whose Brokerage Account Provisioning failed, I want a status-specific unavailable state, so that I do not see controls that cannot work.
 38. As a User whose Brokerage Account Provisioning outcome is unknown, I want a status-specific unavailable state, so that Wealth Manager does not risk creating or using the wrong external account.
@@ -61,15 +61,16 @@ Alpaca remains the source of truth. Wealth Manager will read current state on pa
 - Every server-side Funding operation authenticates independently. The User and Brokerage Account are derived from the session and database relationship rather than accepted from client input.
 - The Funding read interface returns one page-oriented snapshot containing Brokerage Account availability, Funding Source readiness, Buying Power, Withdrawable Cash, cash, net pending Transfers, action restrictions, and the latest 10 Transfers.
 - The snapshot reads Alpaca on demand and is not cached as authoritative application state.
-- Buying Power, Withdrawable Cash, cash, and pending transfer values come from Alpaca's trading-account response. Wealth Manager does not implement margin, settlement, or Buying Power formulas.
+- Buying Power, Withdrawable Cash, and cash come from Alpaca's trading-account response. Wealth Manager does not implement margin, settlement, or Buying Power formulas.
 - The UI labels Alpaca's `cash` value as “Cash,” not “Settled cash,” because those terms are not guaranteed to be equivalent.
-- Net pending value is the signed difference between Alpaca's pending incoming and outgoing transfer amounts.
-- Transfers are read from Alpaca, limited to the latest 10, and displayed newest first.
+- Alpaca does not document a pending incoming amount on the Trading Account schema. Net pending value is derived from the signed amounts of nonterminal Transfers returned by the Transfer list endpoint.
+- The Transfer list is sorted by `created_at` inside Wealth Manager because Alpaca documents ordering by creation time but not its direction. The newest 10 are displayed after sorting.
 - Each Transfer row contains direction, creation date, Alpaca status, and signed amount. The page does not manufacture an expected-completion date.
-- Alpaca status values may be formatted for human readability but are not collapsed into a separate Wealth Manager Transfer state machine.
+- Supported Alpaca Transfer statuses are `QUEUED`, `APPROVAL_PENDING`, `PENDING`, `SENT_TO_CLEARING`, `REJECTED`, `CANCELED`, `APPROVED`, `COMPLETE`, and `RETURNED`. Status values may be formatted for human readability but are not collapsed into a separate Wealth Manager state machine.
+- `QUEUED`, `APPROVAL_PENDING`, `PENDING`, `SENT_TO_CLEARING`, and `APPROVED` are nonterminal for the pending-net display; rejected, canceled, complete, and returned Transfers are excluded.
 - The Funding Source is one synthetic sandbox ACH Relationship per Brokerage Account. Its user-facing identity is always “Chase Checking •••• 4242.”
 - Synthetic routing, account, and owner fixture data remains server-only. The fixture uses an account number ending in 4242 and an Alpaca-compatible sandbox routing number.
-- The Funding Source helper lists existing ACH Relationships before creating one. It reuses the Wealth Manager-managed synthetic relationship when present and does not blindly replay relationship creation.
+- The Funding Source helper lists existing ACH Relationships before creating one. It reuses the active synthetic relationship when present and does not blindly replay relationship creation. If creation returns Alpaca's `409` active-relationship response, it lists relationships again instead of replaying the mutation.
 - New Brokerage Account Provisioning attempts to prepare the Funding Source only after Alpaca successfully creates the Brokerage Account.
 - Funding Source failure does not reverse a linked Brokerage Account or fail authentication. The User can later use Prepare funding, preserving the existing decision to decouple signup success from external provisioning success.
 - Existing Brokerage Accounts without the synthetic relationship show an explicit Prepare funding action. ACH Relationship creation never occurs as a side effect of rendering the page.
@@ -81,8 +82,8 @@ Alpaca remains the source of truth. Wealth Manager will read current state on pa
 - Withdrawal input accepts positive USD amounts with at most two decimal places.
 - Money is validated and passed as decimal strings rather than floating-point calculations.
 - The withdrawal action fetches current Alpaca account details immediately before mutation and rejects an amount above current Withdrawable Cash.
-- Both mutation actions recheck the Brokerage Account, Funding Source approval, direction-specific Alpaca restrictions, and amount server-side.
-- Direction availability follows Alpaca's deposit, withdrawal, account, and transfer restrictions. One direction may remain enabled when the other is blocked.
+- Both mutation actions recheck the Brokerage Account, global `transfers_blocked` state, Funding Source approval, and amount server-side.
+- Alpaca's OpenAPI schema does not expose `depositable_status` or `withdrawable_status` in the Trading Account response. Wealth Manager therefore cannot pre-disable one direction from those values; direction-specific `403` rejections are surfaced after submission.
 - Server Actions are the only application mutation interface in this scope. The page does not introduce public Route Handlers.
 - Server Actions return small UI-oriented success or error results and refresh the current page after successful mutation.
 - Transfer controls remain disabled while their action is pending. The UI does not optimistically add a Transfer or adjust balances.
@@ -100,10 +101,10 @@ Alpaca remains the source of truth. Wealth Manager will read current state on pa
 
 - Tests assert observable behavior and contracts rather than component structure, internal helper calls, or styling implementation.
 - The primary server-unit seam is the public Funding operation layer with Alpaca responses mocked at the existing Broker client boundary.
-- Server-unit coverage includes successful snapshot assembly, latest-10 ordering, cash-field mapping, signed pending values, Funding Source reuse and creation, queued-source handling, account restrictions, amount validation, current Withdrawable Cash enforcement, definitive rejection, ambiguous outcomes, and the prohibition on mutation replay.
+- Server-unit coverage includes successful snapshot assembly, local latest-10 ordering, cash-field mapping, pending-net derivation from exact nonterminal statuses, Funding Source reuse and creation, `409` relationship recovery, queued-source handling, global account restrictions, direction-specific `403` handling, amount validation, current Withdrawable Cash enforcement, definitive rejection, ambiguous outcomes, and the prohibition on mutation replay.
 - Provisioning tests cover the added attempt to prepare a Funding Source after successful Brokerage Account creation and verify that Funding Source failure does not change signup success or the linked Brokerage Account outcome.
 - The browser-component seam exercises the rendered Funding page and dialogs with stubbed read data and Server Action results.
-- Browser-component coverage includes keyboard-accessible dialog behavior, deposit whole-dollar validation, withdrawal cent validation, confirmation content, pending-submit protection, direction-specific disabled states, source preparation states, success refresh behavior, unknown-outcome messaging, Transfer rows, responsive information access, and accessible status/error announcements.
+- Browser-component coverage includes keyboard-accessible dialog behavior, deposit whole-dollar validation, withdrawal cent validation, confirmation content, pending-submit protection, globally blocked Transfer controls, direction-specific rejection messages, source preparation states, success refresh behavior, unknown-outcome messaging, Transfer rows, responsive information access, and accessible status/error announcements.
 - Existing server-unit tests for Alpaca account Provisioning and Broker mutation replay are the prior art for backend coverage.
 - Existing real-browser dialog tests are the prior art for modal focus, keyboard interaction, and accessible form behavior.
 - Existing Playwright tests remain the prior art for production-build navigation and authentication boundaries, but this feature does not add an automated real-Alpaca journey.
@@ -134,4 +135,5 @@ Alpaca remains the source of truth. Wealth Manager will read current state on pa
 - The Funding mockup is directional for layout and information hierarchy. This specification intentionally removes unsupported controls and replaces misleading real-bank timing copy.
 - Current Alpaca documentation states that sandbox ACH deposits and withdrawals are simulated and may settle differently from production. The UI must not promise production timing.
 - Existing ADRs require the feature to remain sandbox-only, keep signup independent from external Provisioning success, and avoid replaying Alpaca mutations without proven idempotency.
+- The checked-in Alpaca Broker OpenAPI document is the contract reference for endpoint payloads, optional fields, status enums, and documented error responses. It confirms that standard ACH Relationship and ACH Transfer creation do not accept an idempotency key.
 - The domain glossary now defines Funding Source, Buying Power, and Withdrawable Cash for this feature.

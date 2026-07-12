@@ -41,3 +41,4 @@ Visual product direction lives in `.mockups/`. See `docs/agents/mockups.md`.
 - At this time, we do not intend to use Plaid. It should be simple enough to fund sandbox Alpaca Brokerage accounts without using Plaid.
 - Never use `--watch` when running tests. That is for the user to run only.
 - This project does not use CI. All testing, linting, and other checks are performed locally.
+- Be very careful when reading OpenAPI yaml specs. They are often huge and would blow out your context window if read in full. Prefer targeted `rg` and/or line ranges.

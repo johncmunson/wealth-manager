@@ -11,7 +11,8 @@
 - [ ] Deposit amounts must be positive whole USD amounts; decimals, malformed values, zero, and negative values are rejected on both client and server.
 - [ ] Amount validation and submission preserve decimal-string money semantics without floating-point calculations.
 - [ ] The Server Action authenticates independently and derives the Brokerage Account and ACH Relationship from trusted server state.
-- [ ] The Server Action rechecks Funding Source approval and current Alpaca deposit/account restrictions immediately before mutation.
+- [ ] The Server Action rechecks Funding Source approval and the Trading Account's global `transfers_blocked` state immediately before mutation.
+- [ ] Because Alpaca does not expose `depositable_status` in the Trading Account schema, a direction-specific `403` rejection is surfaced after submission rather than predicted in the UI.
 - [ ] Deposits are submitted to Alpaca as one-time incoming ACH Transfers.
 - [ ] The submit control remains disabled while pending so a double-click cannot dispatch twice.
 - [ ] The UI does not optimistically change balances or add a Transfer before Alpaca accepts it.
@@ -20,6 +21,6 @@
 - [ ] Authentication failures, timeouts, unreadable responses, and other ambiguous outcomes are never automatically replayed.
 - [ ] An ambiguous result states that the outcome is unknown and refreshes recent Transfer history once so the User can verify before trying again.
 - [ ] No recurrence, scheduling, notes, bank selection, Transfer intent persistence, or local Transfer ledger is introduced.
-- [ ] Server-unit tests cover all amount boundaries, authorization, restrictions, approved-source enforcement, accepted deposits, definitive failures, ambiguous outcomes, and no replay.
+- [ ] Server-unit tests cover all amount boundaries, authorization, global Transfer blocking, direction-specific `403` rejection, approved-source enforcement, accepted deposits, definitive failures, ambiguous outcomes, and no replay.
 - [ ] Browser-component tests cover dialog focus, keyboard operation, whole-dollar validation, review content, confirmation, pending protection, success, errors, and unknown outcomes.
 - [ ] A manual Alpaca sandbox acceptance pass verifies one whole-dollar deposit and confirms the refreshed balance and recent Transfer.
