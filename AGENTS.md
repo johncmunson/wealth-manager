@@ -32,7 +32,10 @@ Visual product direction lives in `.mockups/`. See `docs/agents/mockups.md`.
 
 - Use `pnpm` and/or `pnpx` as opposed to `npm` or `yarn`.
 - A dev server will always be running for you at `http://localhost:3000`
-- When launching `agent-browser` for this app, reuse the authenticated profile with `--profile ~/.agent-browser/profiles/wealth-manager`
+- When launching `agent-browser` for this app, reuse the authenticated profile with `--profile ~/.agent-browser/profiles/wealth-manager`. **Alert the user** if you discover that the profile is no longer authenticated and coach them through restoring it:
+  1. Have them sign in through their normal browser, then copy the `better-auth.session_token` value from DevTools → Application → Cookies → `http://localhost:3000`.
+  2. Have them save only the value to `/tmp/wealth-manager-session-cookie` by running the following command: `bash -c 'umask 077; IFS= read -rsp "Paste session cookie value: " cookie && printf "%s" "$cookie" > /tmp/wealth-manager-session-cookie && printf "\nSaved.\n"'`
+  3. Import it with `agent-browser cookies set` for `http://localhost:3000`, verify an authenticated page, and immediately delete the temporary file.
 - The better-auth agent skills might mention URLs like this, `https://better-auth.com/docs/concepts/hooks`. However, `https://better-auth.com/docs` is not an LLM-friendly base URL. Use `https://better-auth.com/llms.txt/docs` as the base URL instead, e.g. `https://better-auth.com/llms.txt/docs/concepts/hooks`.
 - When building frontend UI components and pages, **always** seek to leverage shadcn/ui components as the foundation
 - **Never** mutate any of the foundational shadcn/ui components inside of `components/ui`
