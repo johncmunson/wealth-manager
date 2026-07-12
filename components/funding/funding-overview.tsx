@@ -1,7 +1,13 @@
 "use client"
 
 import { useActionState, useState, useTransition } from "react"
-import { ArrowDownLeft, ArrowUpRight, Landmark, RefreshCw } from "lucide-react"
+import {
+  ArrowDownLeft,
+  ArrowUpRight,
+  DollarSign,
+  Landmark,
+  RefreshCw,
+} from "lucide-react"
 import { useRouter } from "next/navigation"
 
 import { Badge } from "@/components/ui/badge"
@@ -37,7 +43,11 @@ import {
   FieldGroup,
   FieldLabel,
 } from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@/components/ui/input-group"
 import { Separator } from "@/components/ui/separator"
 import {
   depositFunding,
@@ -267,20 +277,27 @@ function DepositDialog({ disabled }: { disabled: boolean }) {
             <FieldGroup>
               <Field data-invalid={Boolean(error)}>
                 <FieldLabel htmlFor="deposit-amount">Amount</FieldLabel>
-                <Input
-                  id="deposit-amount"
-                  name="amount"
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete="off"
-                  autoFocus
-                  value={amount}
-                  aria-invalid={Boolean(error)}
-                  aria-describedby="deposit-help"
-                  onChange={(event) => setAmount(event.target.value)}
-                />
-                <FieldDescription id="deposit-help">
-                  Whole USD only. Funding Source: Chase Checking •••• 4242
+                <InputGroup>
+                  <InputGroupAddon>
+                    <DollarSign aria-hidden="true" />
+                  </InputGroupAddon>
+                  <InputGroupInput
+                    id="deposit-amount"
+                    name="amount"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    autoFocus
+                    value={amount}
+                    aria-invalid={Boolean(error)}
+                    aria-describedby="deposit-help"
+                    onChange={(event) => setAmount(event.target.value)}
+                  />
+                </InputGroup>
+                <FieldDescription id="deposit-help" className="text-xs">
+                  Funds are transferring from:
+                  <br />
+                  Chase Checking •••• 4242
                 </FieldDescription>
                 <FieldError>{error}</FieldError>
               </Field>

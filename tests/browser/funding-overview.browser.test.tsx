@@ -285,13 +285,12 @@ test("opens the deposit dialog from the keyboard and focuses its only input", as
     .element(screen.getByRole("heading", { name: "Add funds" }))
     .toBeVisible()
   await expect.element(screen.getByLabelText("Amount")).toHaveFocus()
-  expect(await screen.getByRole("textbox").all()).toHaveLength(1)
+  expect(screen.getByRole("textbox").all()).toHaveLength(1)
   await expect
-    .element(
-      screen.getByText(
-        "Whole USD only. Funding Source: Chase Checking •••• 4242",
-      ),
-    )
+    .element(screen.getByText("Funds are transferring from:"))
+    .toBeVisible()
+  await expect
+    .element(screen.getByText("Chase Checking •••• 4242").nth(1))
     .toBeVisible()
 
   await userEvent.keyboard("{Escape}")
