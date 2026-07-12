@@ -8,6 +8,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { POST_SIGN_IN_URL } from "@/lib/auth/routes"
 
 export default function Home() {
   return (
@@ -27,7 +28,7 @@ export default function Home() {
           <Button
             nativeButton={false}
             variant="outline"
-            render={<Link href="/app" />}
+            render={<Link href={POST_SIGN_IN_URL} />}
           >
             Open app
           </Button>
