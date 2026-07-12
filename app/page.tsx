@@ -16,15 +16,19 @@ export default function Home() {
         <CardHeader className="text-center">
           <CardTitle>Wealth Manager</CardTitle>
           <CardDescription>
-            Connect your financial life, understand your portfolio, and plan with
-            confidence.
+            Connect your financial life, understand your portfolio, and plan
+            with confidence.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
           <Button nativeButton={false} render={<Link href="/sign-in" />}>
             Sign in
           </Button>
-          <Button nativeButton={false} variant="outline" render={<Link href="/app" />}>
+          <Button
+            nativeButton={false}
+            variant="outline"
+            render={<Link href="/app" />}
+          >
             Open app
           </Button>
         </CardContent>

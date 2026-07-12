@@ -21,7 +21,9 @@ test("a visitor can navigate to sign in", async ({ page }) => {
   ).toBeEnabled()
 })
 
-test("the protected workspace redirects anonymous visitors", async ({ page }) => {
+test("the protected workspace redirects anonymous visitors", async ({
+  page,
+}) => {
   await page.goto("/app")
 
   await expect(page).toHaveURL(/\/sign-in$/)

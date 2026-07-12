@@ -6,9 +6,7 @@ import { Button } from "@/components/ui/button"
 import { authClient } from "@/lib/auth-client"
 import { POST_SIGN_IN_URL } from "@/lib/auth/routes"
 
-type SocialProvider = Parameters<
-  typeof authClient.signIn.social
->[0]["provider"]
+type SocialProvider = Parameters<typeof authClient.signIn.social>[0]["provider"]
 
 type SocialSignInButtonProps = {
   children: ReactNode

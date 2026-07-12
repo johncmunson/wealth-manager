@@ -34,7 +34,9 @@ describe("SocialSignInButton", () => {
     const user = userEvent.setup()
 
     renderGoogleSignInButton()
-    await user.click(screen.getByRole("button", { name: "Continue with Google" }))
+    await user.click(
+      screen.getByRole("button", { name: "Continue with Google" }),
+    )
 
     expect(signInSocial).toHaveBeenCalledWith({
       provider: "google",
@@ -47,19 +49,29 @@ describe("SocialSignInButton", () => {
     const user = userEvent.setup()
 
     renderGoogleSignInButton()
-    await user.click(screen.getByRole("button", { name: "Continue with Google" }))
+    await user.click(
+      screen.getByRole("button", { name: "Continue with Google" }),
+    )
 
-    expect(screen.getByRole("button", { name: "Redirecting..." })).toBeDisabled()
+    expect(
+      screen.getByRole("button", { name: "Redirecting..." }),
+    ).toBeDisabled()
   })
 
   it("announces provider errors", async () => {
-    signInSocial.mockResolvedValue({ error: { message: "Provider unavailable" } })
+    signInSocial.mockResolvedValue({
+      error: { message: "Provider unavailable" },
+    })
     const user = userEvent.setup()
 
     renderGoogleSignInButton()
-    await user.click(screen.getByRole("button", { name: "Continue with Google" }))
+    await user.click(
+      screen.getByRole("button", { name: "Continue with Google" }),
+    )
 
     expect(screen.getByRole("alert")).toHaveTextContent("Provider unavailable")
-    expect(screen.getByRole("button", { name: "Continue with Google" })).toBeEnabled()
+    expect(
+      screen.getByRole("button", { name: "Continue with Google" }),
+    ).toBeEnabled()
   })
 })

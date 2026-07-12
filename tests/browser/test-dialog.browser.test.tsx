@@ -10,8 +10,12 @@ test("a modal traps initial focus and restores it when closed", async () => {
 
   await trigger.click()
 
-  await expect.element(screen.getByRole("heading", { name: "Confirm plan" })).toBeVisible()
-  await expect.element(screen.getByRole("textbox", { name: "Plan name" })).toHaveFocus()
+  await expect
+    .element(screen.getByRole("heading", { name: "Confirm plan" }))
+    .toBeVisible()
+  await expect
+    .element(screen.getByRole("textbox", { name: "Plan name" }))
+    .toHaveFocus()
 
   await screen.getByRole("button", { name: "Done" }).click()
 
@@ -27,5 +31,7 @@ test("Escape dismisses the native modal", async () => {
   await userEvent.keyboard("{Escape}")
 
   expect(document.querySelector("dialog")?.open).toBe(false)
-  await expect.element(screen.getByRole("button", { name: "Review plan" })).toHaveFocus()
+  await expect
+    .element(screen.getByRole("button", { name: "Review plan" }))
+    .toHaveFocus()
 })
