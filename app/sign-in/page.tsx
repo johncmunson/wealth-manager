@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import { redirect } from "next/navigation"
 
-import { GoogleSignInButton } from "@/components/auth/google-sign-in-button"
+import { SocialSignInButton } from "@/components/auth/social-sign-in-button"
 import {
   Card,
   CardContent,
@@ -9,6 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { POST_SIGN_IN_URL } from "@/lib/auth/routes"
 import { getCurrentSession } from "@/lib/auth/session"
 
 export const metadata: Metadata = {
@@ -19,7 +20,7 @@ export default async function SignInPage() {
   const session = await getCurrentSession()
 
   if (session) {
-    redirect("/app")
+    redirect(POST_SIGN_IN_URL)
   }
 
   return (
@@ -32,7 +33,9 @@ export default async function SignInPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <GoogleSignInButton />
+          <SocialSignInButton provider="google">
+            Continue with Google
+          </SocialSignInButton>
         </CardContent>
       </Card>
     </main>

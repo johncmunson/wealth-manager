@@ -1,5 +1,8 @@
 "use client"
 
+import { useRouter } from "next/navigation"
+import { useState } from "react"
+
 import {
   Activity,
   ChevronsUpDown,
@@ -13,6 +16,7 @@ import {
 } from "lucide-react"
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { authClient } from "@/lib/auth-client"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -47,6 +51,17 @@ const navItems = [
 ]
 
 export function AppSidebar() {
+  const router = useRouter()
+  const [isSigningOut, setIsSigningOut] = useState(false)
+
+  async function handleSignOut() {
+    setIsSigningOut(true)
+
+    await authClient.signOut()
+    router.replace("/sign-in")
+    router.refresh()
+  }
+
   return (
     <Sidebar variant="inset">
       <SidebarHeader className="gap-3 mt-0.5">
@@ -154,9 +169,12 @@ export function AppSidebar() {
                     <Settings />
                     Settings
                   </DropdownMenuItem>
-                  <DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={handleSignOut}
+                    disabled={isSigningOut}
+                  >
                     <LogOut />
-                    Logout
+                    {isSigningOut ? "Signing out..." : "Logout"}
                   </DropdownMenuItem>
                 </DropdownMenuGroup>
               </DropdownMenuContent>

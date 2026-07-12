@@ -1,11 +1,24 @@
 "use client"
 
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 
 import { Button } from "@/components/ui/button"
 import { authClient } from "@/lib/auth-client"
+import { POST_SIGN_IN_URL } from "@/lib/auth/routes"
 
-export function GoogleSignInButton() {
+type SocialProvider = Parameters<
+  typeof authClient.signIn.social
+>[0]["provider"]
+
+type SocialSignInButtonProps = {
+  children: ReactNode
+  provider: SocialProvider
+}
+
+export function SocialSignInButton({
+  children,
+  provider,
+}: SocialSignInButtonProps) {
   const [isPending, setIsPending] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
@@ -14,12 +27,12 @@ export function GoogleSignInButton() {
     setErrorMessage(null)
 
     const { error } = await authClient.signIn.social({
-      provider: "google",
-      callbackURL: "/app",
+      provider,
+      callbackURL: POST_SIGN_IN_URL,
     })
 
     if (error) {
-      setErrorMessage(error.message ?? "Unable to start Google sign-in.")
+      setErrorMessage(error.message ?? "Unable to start social sign-in.")
       setIsPending(false)
     }
   }
@@ -27,7 +40,7 @@ export function GoogleSignInButton() {
   return (
     <div className="flex flex-col gap-3">
       <Button type="button" onClick={handleSignIn} disabled={isPending}>
-        {isPending ? "Redirecting..." : "Continue with Google"}
+        {isPending ? "Redirecting..." : children}
       </Button>
       {errorMessage ? (
         <p className="text-sm text-destructive" role="alert">

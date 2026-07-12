@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import { GoogleSignInButton } from "../../components/auth/google-sign-in-button"
+import { SocialSignInButton } from "../../components/auth/social-sign-in-button"
 
 const { signInSocial } = vi.hoisted(() => ({
   signInSocial: vi.fn(),
@@ -16,16 +16,24 @@ vi.mock("@/lib/auth-client", () => ({
   },
 }))
 
-describe("GoogleSignInButton", () => {
+function renderGoogleSignInButton() {
+  return render(
+    <SocialSignInButton provider="google">
+      Continue with Google
+    </SocialSignInButton>,
+  )
+}
+
+describe("SocialSignInButton", () => {
   beforeEach(() => {
     signInSocial.mockReset()
   })
 
-  it("starts Google sign-in with the workspace callback", async () => {
+  it("starts sign-in for the selected provider with the workspace callback", async () => {
     signInSocial.mockResolvedValue({ error: null })
     const user = userEvent.setup()
 
-    render(<GoogleSignInButton />)
+    renderGoogleSignInButton()
     await user.click(screen.getByRole("button", { name: "Continue with Google" }))
 
     expect(signInSocial).toHaveBeenCalledWith({
@@ -38,7 +46,7 @@ describe("GoogleSignInButton", () => {
     signInSocial.mockReturnValue(new Promise(() => undefined))
     const user = userEvent.setup()
 
-    render(<GoogleSignInButton />)
+    renderGoogleSignInButton()
     await user.click(screen.getByRole("button", { name: "Continue with Google" }))
 
     expect(screen.getByRole("button", { name: "Redirecting..." })).toBeDisabled()
@@ -48,7 +56,7 @@ describe("GoogleSignInButton", () => {
     signInSocial.mockResolvedValue({ error: { message: "Provider unavailable" } })
     const user = userEvent.setup()
 
-    render(<GoogleSignInButton />)
+    renderGoogleSignInButton()
     await user.click(screen.getByRole("button", { name: "Continue with Google" }))
 
     expect(screen.getByRole("alert")).toHaveTextContent("Provider unavailable")
