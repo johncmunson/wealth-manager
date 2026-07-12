@@ -1,5 +1,6 @@
-import { AppPlaceholderContent } from "@/components/app/app-placeholder-content"
+import { FundingOverview } from "@/components/funding/funding-overview"
+import { getFundingSnapshot } from "@/lib/alpaca/funding"
 
-export default function Page() {
-  return <AppPlaceholderContent />
+export default async function Page() {
+  return <FundingOverview snapshot={await getFundingSnapshot()} />
 }

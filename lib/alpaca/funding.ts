@@ -1,0 +1,351 @@
+import "server-only"
+
+import { eq } from "drizzle-orm"
+
+import { db } from "../../db"
+import { alpacaAccounts, type AlpacaProvisioningStatus } from "../../db/schema"
+import { getCurrentUserId } from "../auth/session"
+import { alpacaBrokerRequest } from "./broker-client"
+
+const transferStatuses = [
+  "QUEUED",
+  "APPROVAL_PENDING",
+  "PENDING",
+  "SENT_TO_CLEARING",
+  "REJECTED",
+  "CANCELED",
+  "APPROVED",
+  "COMPLETE",
+  "RETURNED",
+] as const
+
+type TransferStatus = (typeof transferStatuses)[number]
+type FundingSourceState = "ready" | "preparing" | "missing" | "unavailable"
+
+export interface FundingTransfer {
+  readonly id: string
+  readonly direction: "INCOMING" | "OUTGOING"
+  readonly status: TransferStatus
+  readonly statusLabel: string
+  readonly createdAt: string
+  readonly signedAmount: string
+}
+
+export type FundingSnapshot =
+  | {
+      readonly accountState:
+        Exclude<AlpacaProvisioningStatus, "linked"> | "missing"
+    }
+  | {
+      readonly accountState: "linked"
+      readonly balances: {
+        readonly buyingPower: string | null
+        readonly withdrawableCash: string | null
+        readonly cash: string | null
+        readonly netPending: string | null
+      }
+      readonly balancesError?: string
+      readonly transfersBlocked: boolean | null
+      readonly fundingSource: {
+        readonly state: FundingSourceState
+        readonly name: "Chase Checking •••• 4242"
+        readonly message: string
+        readonly error?: boolean
+      }
+      readonly transfers: readonly FundingTransfer[]
+      readonly transfersError?: string
+    }
+
+const TRANSFER_STATUS_SET = new Set<string>(transferStatuses)
+const NONTERMINAL_STATUSES = new Set<TransferStatus>([
+  "QUEUED",
+  "APPROVAL_PENDING",
+  "PENDING",
+  "SENT_TO_CLEARING",
+  "APPROVED",
+])
+const RELATIONSHIP_STATUSES = new Set([
+  "QUEUED",
+  "APPROVED",
+  "REJECTED",
+  "PENDING",
+  "CANCEL_REQUESTED",
+])
+const DECIMAL = /^-?\d+(?:\.\d+)?$/
+const POSITIVE_DECIMAL = /^\d+(?:\.\d+)?$/
+const SOURCE_NAME = "Chase Checking •••• 4242" as const
+
+interface TradingAccount {
+  readonly buying_power?: string
+  readonly cash_withdrawable?: string
+  readonly cash?: string
+  readonly transfers_blocked?: boolean
+}
+
+interface AlpacaAchRelationship {
+  readonly id: string
+  readonly status: string
+  readonly bankAccountNumber?: string
+}
+
+interface TransferResponse {
+  readonly id: string
+  readonly direction: "INCOMING" | "OUTGOING"
+  readonly status: TransferStatus
+  readonly amount: string
+  readonly created_at: string
+}
+
+function optionalDecimal(value: unknown) {
+  if (value === undefined || value === null) return undefined
+  if (typeof value !== "string" || !DECIMAL.test(value)) throw new Error()
+  return value
+}
+
+function parseTradingAccount(value: unknown): TradingAccount {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error()
+  }
+  const account = value as Record<string, unknown>
+  if (
+    account.transfers_blocked !== undefined &&
+    typeof account.transfers_blocked !== "boolean"
+  ) {
+    throw new Error()
+  }
+
+  return {
+    buying_power: optionalDecimal(account.buying_power),
+    cash_withdrawable: optionalDecimal(account.cash_withdrawable),
+    cash: optionalDecimal(account.cash),
+    transfers_blocked: account.transfers_blocked as boolean | undefined,
+  }
+}
+
+function parseRelationships(value: unknown): AlpacaAchRelationship[] {
+  if (!Array.isArray(value)) throw new Error()
+  return value.map((item) => {
+    if (typeof item !== "object" || item === null) throw new Error()
+    const relationship = item as Record<string, unknown>
+    if (
+      typeof relationship.id !== "string" ||
+      typeof relationship.status !== "string" ||
+      !RELATIONSHIP_STATUSES.has(relationship.status) ||
+      (relationship.bank_account_number !== undefined &&
+        typeof relationship.bank_account_number !== "string")
+    ) {
+      throw new Error()
+    }
+    return {
+      id: relationship.id,
+      status: relationship.status,
+      bankAccountNumber: relationship.bank_account_number as string | undefined,
+    }
+  })
+}
+
+function parseTransfers(value: unknown): TransferResponse[] {
+  if (!Array.isArray(value)) throw new Error()
+  return value.map((item) => {
+    if (typeof item !== "object" || item === null) throw new Error()
+    const transfer = item as Record<string, unknown>
+    if (
+      typeof transfer.id !== "string" ||
+      (transfer.direction !== "INCOMING" &&
+        transfer.direction !== "OUTGOING") ||
+      typeof transfer.status !== "string" ||
+      !TRANSFER_STATUS_SET.has(transfer.status) ||
+      typeof transfer.amount !== "string" ||
+      !POSITIVE_DECIMAL.test(transfer.amount) ||
+      typeof transfer.created_at !== "string" ||
+      !Number.isFinite(Date.parse(transfer.created_at))
+    ) {
+      throw new Error()
+    }
+    return transfer as unknown as TransferResponse
+  })
+}
+
+async function readAlpaca<T>(
+  responsePromise: Promise<Response>,
+  parse: (value: unknown) => T,
+) {
+  const response = await responsePromise
+  if (!response.ok) throw new Error()
+  return parse(await response.json())
+}
+
+function sumPending(transfers: readonly TransferResponse[]) {
+  const pending = transfers.filter((transfer) =>
+    NONTERMINAL_STATUSES.has(transfer.status),
+  )
+  const scale = Math.max(
+    0,
+    ...pending.map(({ amount }) => amount.split(".")[1]?.length ?? 0),
+  )
+  const total = pending.reduce((sum, transfer) => {
+    const [whole, fraction = ""] = transfer.amount.split(".")
+    const units = BigInt(whole + fraction.padEnd(scale, "0"))
+    return sum + (transfer.direction === "INCOMING" ? units : -units)
+  }, BigInt(0))
+  if (scale === 0) return total.toString()
+
+  const negative = total < BigInt(0)
+  const digits = (negative ? -total : total).toString().padStart(scale + 1, "0")
+  return `${negative ? "-" : ""}${digits.slice(0, -scale)}.${digits.slice(-scale)}`
+}
+
+function mapTransfers(
+  transfers: readonly TransferResponse[],
+): FundingTransfer[] {
+  return transfers
+    .toSorted(
+      (left, right) =>
+        Date.parse(right.created_at) - Date.parse(left.created_at),
+    )
+    .slice(0, 10)
+    .map((transfer) => ({
+      id: transfer.id,
+      direction: transfer.direction,
+      status: transfer.status,
+      statusLabel: transfer.status
+        .toLowerCase()
+        .split("_")
+        .map((word) => word[0].toUpperCase() + word.slice(1))
+        .join(" "),
+      createdAt: transfer.created_at,
+      signedAmount:
+        transfer.direction === "OUTGOING"
+          ? `-${transfer.amount}`
+          : transfer.amount,
+    }))
+}
+
+function mapFundingSource(relationships: readonly AlpacaAchRelationship[]) {
+  const matching = relationships.filter(({ bankAccountNumber }) =>
+    bankAccountNumber?.endsWith("4242"),
+  )
+  const candidates =
+    matching.length > 0
+      ? matching
+      : relationships.length === 1
+        ? relationships
+        : []
+  const relationship =
+    candidates.find(({ status }) => status === "APPROVED") ??
+    candidates.find(
+      ({ status }) => status === "QUEUED" || status === "PENDING",
+    ) ??
+    candidates[0]
+
+  if (!relationship) {
+    return {
+      state: "missing" as const,
+      name: SOURCE_NAME,
+      message: "No Funding Source is available yet.",
+    }
+  }
+  if (relationship.status === "APPROVED") {
+    return {
+      state: "ready" as const,
+      name: SOURCE_NAME,
+      message: "Sandbox deposits and withdrawals are simulated.",
+    }
+  }
+  if (relationship.status === "QUEUED" || relationship.status === "PENDING") {
+    return {
+      state: "preparing" as const,
+      name: SOURCE_NAME,
+      message: "Funding source is being prepared.",
+    }
+  }
+  return {
+    state: "unavailable" as const,
+    name: SOURCE_NAME,
+    message: "The Funding Source is unavailable.",
+  }
+}
+
+export async function getFundingSnapshot(): Promise<FundingSnapshot> {
+  const userId = await getCurrentUserId()
+  const [account] = await db
+    .select({
+      alpacaAccountId: alpacaAccounts.alpacaAccountId,
+      provisioningStatus: alpacaAccounts.provisioningStatus,
+    })
+    .from(alpacaAccounts)
+    .where(eq(alpacaAccounts.userId, userId))
+    .limit(1)
+
+  if (!account) return { accountState: "missing" }
+  if (account.provisioningStatus !== "linked") {
+    return { accountState: account.provisioningStatus }
+  }
+  if (!account.alpacaAccountId) return { accountState: "unknown" }
+
+  const accountId = encodeURIComponent(account.alpacaAccountId)
+  const requests = {
+    account: readAlpaca(
+      alpacaBrokerRequest(`/v1/trading/accounts/${accountId}/account`, {
+        cache: "no-store",
+        authenticationReplay: "safe-once",
+      }),
+      parseTradingAccount,
+    ),
+    relationships: readAlpaca(
+      alpacaBrokerRequest(`/v1/accounts/${accountId}/ach_relationships`, {
+        cache: "no-store",
+        authenticationReplay: "safe-once",
+      }),
+      parseRelationships,
+    ),
+    transfers: readAlpaca(
+      alpacaBrokerRequest(`/v1/accounts/${accountId}/transfers`, {
+        cache: "no-store",
+        authenticationReplay: "safe-once",
+      }),
+      parseTransfers,
+    ),
+  }
+  const [accountResult, relationshipResult, transferResult] =
+    await Promise.allSettled([
+      requests.account,
+      requests.relationships,
+      requests.transfers,
+    ])
+  const accountData =
+    accountResult.status === "fulfilled" ? accountResult.value : undefined
+  const transferData =
+    transferResult.status === "fulfilled" ? transferResult.value : undefined
+
+  return {
+    accountState: "linked",
+    balances: {
+      buyingPower: accountData?.buying_power ?? null,
+      withdrawableCash: accountData?.cash_withdrawable ?? null,
+      cash: accountData?.cash ?? null,
+      netPending: transferData ? sumPending(transferData) : null,
+    },
+    ...(accountData
+      ? {}
+      : {
+          balancesError: "Cash availability could not be loaded from Alpaca.",
+        }),
+    transfersBlocked: accountData?.transfers_blocked ?? null,
+    fundingSource:
+      relationshipResult.status === "fulfilled"
+        ? mapFundingSource(relationshipResult.value)
+        : {
+            state: "unavailable",
+            name: SOURCE_NAME,
+            message: "The Funding Source could not be loaded from Alpaca.",
+            error: true,
+          },
+    transfers: transferData ? mapTransfers(transferData) : [],
+    ...(transferData
+      ? {}
+      : {
+          transfersError: "Recent Transfers could not be loaded from Alpaca.",
+        }),
+  }
+}
