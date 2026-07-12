@@ -41,4 +41,4 @@ Visual product direction lives in `.mockups/`. See `docs/agents/mockups.md`.
 - At this time, we do not intend to use Plaid. It should be simple enough to fund sandbox Alpaca Brokerage accounts without using Plaid.
 - Never use `--watch` when running tests. That is for the user to run only.
 - This project does not use CI. All testing, linting, and other checks are performed locally.
-- Be very careful when reading OpenAPI yaml specs. They are often huge and would blow out your context window if read in full. Prefer targeted `rg` and/or line ranges.
+- Be very careful when reading potentially massive files such as OpenAPI yaml specs. The risk is that you would blow out your context window if read in full. Prefer targeted `rg` and/or line ranges. Often, it can be advantagous to utilize a scout or researcher subagent (or a parallel fleet of them) for extracting out information from files like this. Alternatively, if the file is structured text such as JSON or YAML, sometimes a Python script could be helpful for filtering out information. These recommendations apply in general to any massive files that contain important context.
