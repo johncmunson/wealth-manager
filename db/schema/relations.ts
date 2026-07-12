@@ -1,12 +1,12 @@
 import { relations } from "drizzle-orm"
 
+import { alpacaAccounts } from "./alpaca-account"
 import { accounts, sessions, users } from "./auth"
-import { profiles } from "./profile"
 
 export const usersRelations = relations(users, ({ many, one }) => ({
   sessions: many(sessions),
   accounts: many(accounts),
-  profile: one(profiles),
+  alpacaAccount: one(alpacaAccounts),
 }))
 
 export const sessionsRelations = relations(sessions, ({ one }) => ({
@@ -23,9 +23,9 @@ export const accountsRelations = relations(accounts, ({ one }) => ({
   }),
 }))
 
-export const profilesRelations = relations(profiles, ({ one }) => ({
+export const alpacaAccountsRelations = relations(alpacaAccounts, ({ one }) => ({
   user: one(users, {
-    fields: [profiles.userId],
+    fields: [alpacaAccounts.userId],
     references: [users.id],
   }),
 }))

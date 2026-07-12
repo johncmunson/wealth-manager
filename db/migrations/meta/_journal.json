@@ -15,6 +15,13 @@
       "when": 1783565508403,
       "tag": "0001_bent_paladin",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1783846980501,
+      "tag": "0002_mature_scalphunter",
+      "breakpoints": true
     }
   ]
 }

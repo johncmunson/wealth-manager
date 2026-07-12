@@ -6,6 +6,7 @@ import { nextCookies } from "better-auth/next-js"
 
 import { db } from "@/db"
 import * as schema from "@/db/schema"
+import { ensureAlpacaAccount } from "@/lib/alpaca/account-provisioning"
 import { getAdditionalTrustedOrigins } from "@/lib/auth/origins"
 
 const googleClientId = process.env.GOOGLE_CLIENT_ID
@@ -53,18 +54,24 @@ export const auth = betterAuth({
       create: {
         after: async (user) => {
           const userId = Number(user.id)
-          if (!Number.isFinite(userId)) {
-            throw new Error(
-              "Expected a numeric user id when creating a project",
+          if (!Number.isSafeInteger(userId)) {
+            console.error(
+              "Could not provision Alpaca account: invalid user id.",
+            )
+            return
+          }
+
+          try {
+            await ensureAlpacaAccount({ id: userId, email: user.email })
+          } catch {
+            // Authentication must succeed even when provisioning infrastructure fails.
+            console.error(
+              "Could not persist Alpaca account provisioning state.",
+              {
+                userId,
+              },
             )
           }
-          await db
-            .insert(schema.profiles)
-            .values({
-              userId,
-              displayName: user.name,
-            })
-            .onConflictDoNothing({ target: schema.profiles.userId })
         },
       },
     },

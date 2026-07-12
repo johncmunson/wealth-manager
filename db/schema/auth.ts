@@ -14,7 +14,7 @@ import { identityPrimaryKey, timestamps } from "./_helpers"
 /**
  * Core Better Auth tables only.
  *
- * App-specific tables that reference Better Auth users, such as `profiles`,
+ * App-specific tables that reference Better Auth users, such as `alpacaAccounts`,
  * live in their own schema files so the Better Auth surface area stays clear.
  */
 export const users = pgTable(
