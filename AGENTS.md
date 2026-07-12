@@ -6,7 +6,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 <!-- END:nextjs-agent-rules -->
 
-<general-planning-workflow>
+## App summary
+
+Wealth Manager is a long-term investing web app built on top of the Alpaca Broker API. For more details, see @README.md
 
 ## Agent skills
 
@@ -26,9 +28,7 @@ Domain documentation uses a single-context layout. See `docs/agents/domain.md`.
 
 Visual product direction lives in `.mockups/`. See `docs/agents/mockups.md`.
 
-</general-planning-workflow>
-
-## Additional Notes
+## Additional notes
 
 - Use `pnpm` and/or `pnpx` as opposed to `npm` or `yarn`.
 - A dev server will always be running for you at `http://localhost:3000`
@@ -45,3 +45,4 @@ Visual product direction lives in `.mockups/`. See `docs/agents/mockups.md`.
 - Never use `--watch` when running tests. That is for the user to run only.
 - This project does not use CI. All testing, linting, and other checks are performed locally.
 - Be very careful when reading potentially massive files such as OpenAPI yaml specs. The risk is that you would blow out your context window if read in full. Prefer targeted `rg` and/or line ranges. Often, it can be advantagous to utilize a scout or researcher subagent (or a parallel fleet of them) for extracting out information from files like this. Alternatively, if the file is structured text such as JSON or YAML, sometimes a Python script could be helpful for filtering out information. These recommendations apply in general to any massive files that contain important context.
+- When working with the Alpaca Broker API, some features may be difficult to implement and fully smoke test over the weekend or during non-trading hours, just FYI. For example, ACH may not fully settle/clear until the following Monday. Or, trading may be limited or restricted.
