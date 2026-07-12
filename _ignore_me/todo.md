@@ -14,7 +14,7 @@
 - [ ] vitest / node:test
 - [x] shadcn skill + boilerplate
 - [ ] resend
-- [ ] -
+- [ ] dark mode -> just rely on system settings, don't support user customizable dark mode. https://nextjs.org/docs/app/api-reference/functions/generate-viewport
 - [ ] -
 - [ ] -
 - [ ] -
