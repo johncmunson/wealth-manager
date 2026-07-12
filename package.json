@@ -23,7 +23,7 @@
     "test:route": "pnpm db:prepare:test && NODE_ENV=test vitest run --project route",
     "test:integration": "pnpm db:prepare:test && NODE_ENV=test vitest run --project database --project route",
     "test:e2e": "pnpm db:prepare:test && playwright test",
-    "test:coverage": "NODE_ENV=test vitest run --project unit-server --project component --coverage",
+    "test:coverage": "pnpm db:prepare:test && NODE_ENV=test vitest run --coverage",
     "test:watch": "NODE_ENV=test vitest --project unit-server --project component",
     "db:generate": "NODE_ENV=development drizzle-kit generate",
     "db:migrate": "NODE_ENV=development drizzle-kit migrate",
