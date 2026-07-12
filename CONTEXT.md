@@ -62,6 +62,18 @@ _Avoid_: Transaction history
 The product area for understanding a Brokerage Account's cash availability and Transfers.
 _Avoid_: Banking, transfer
 
+**Funding Source**:
+The synthetic sandbox bank account connected to a Brokerage Account for deposits and withdrawals. It is represented to every User as “Chase Checking •••• 4242” and is not a real linked bank account.
+_Avoid_: Linked bank, bank account
+
+**Buying Power**:
+The amount currently available in a Brokerage Account for placing Orders. It may differ from cash that can be withdrawn.
+_Avoid_: Available cash, balance
+
+**Withdrawable Cash**:
+The cash currently eligible to be withdrawn from a Brokerage Account.
+_Avoid_: Buying Power, balance
+
 **Transfer**:
 A movement of cash into or out of a Brokerage Account, including pending movements.
 _Avoid_: Funding, transaction
