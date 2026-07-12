@@ -38,7 +38,7 @@ describe("SocialSignInButton", () => {
 
     expect(signInSocial).toHaveBeenCalledWith({
       provider: "google",
-      callbackURL: "/app",
+      callbackURL: "/app/portfolio",
     })
   })
 
