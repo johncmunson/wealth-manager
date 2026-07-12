@@ -62,7 +62,7 @@ export const auth = betterAuth({
           }
 
           try {
-            await ensureAlpacaAccount({ id: userId, email: user.email })
+            await ensureAlpacaAccount({ id: userId })
           } catch {
             // Authentication must succeed even when provisioning infrastructure fails.
             console.error(

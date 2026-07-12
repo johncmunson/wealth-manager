@@ -39,6 +39,7 @@ curl -fsS --max-time 10 --max-filesize 40000 \
 ## Misc. Notes
 
 - A dev server will always be running for you at `http://localhost:3000`
+- When launching `agent-browser` for this app, reuse the authenticated profile with `--profile ~/.agent-browser/profiles/wealth-manager`
 - The better-auth agent skills might mention URLs like this, `https://better-auth.com/docs/concepts/hooks`. However, `https://better-auth.com/docs` is not an LLM-friendly base URL. Use `https://better-auth.com/llms.txt/docs` as the base URL instead, e.g. `https://better-auth.com/llms.txt/docs/concepts/hooks`.
 - When building frontend UI components and pages, **always** seek to leverage shadcn/ui components as the foundation
 - **Never** mutate any of the foundational shadcn/ui components inside of `components/ui`

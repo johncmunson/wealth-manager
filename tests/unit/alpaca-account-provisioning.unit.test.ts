@@ -3,18 +3,15 @@ import { describe, expect, it } from "vitest"
 import { buildSandboxAccountPayload } from "../../lib/alpaca/account-fixture"
 
 describe("Alpaca sandbox account fixtures", () => {
-  it("builds deterministic, user-specific fully-disclosed data", () => {
+  it("builds user-specific fully-disclosed data with unique sandbox emails", () => {
     const signedAt = new Date("2026-07-12T12:00:00.000Z")
-    const first = buildSandboxAccountPayload(
-      { id: 1000, email: "ada@example.com" },
-      signedAt,
-    )
-    const second = buildSandboxAccountPayload(
-      { id: 1001, email: "grace@example.com" },
-      signedAt,
-    )
+    const first = buildSandboxAccountPayload({ id: 1000 }, signedAt)
+    const second = buildSandboxAccountPayload({ id: 1001 }, signedAt)
 
-    expect(first.contact.email_address).toBe("ada@example.com")
+    expect(first.contact.email_address).toMatch(
+      /^sandbox-[0-9a-f-]{36}@example\.com$/,
+    )
+    expect(first.contact.email_address).not.toBe(second.contact.email_address)
     expect(first.identity).toMatchObject({
       given_name: "Sandbox",
       family_name: "User1000",

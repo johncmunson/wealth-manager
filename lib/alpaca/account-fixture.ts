@@ -2,7 +2,6 @@ import "server-only"
 
 export interface AlpacaProvisioningUser {
   readonly id: number
-  readonly email: string
 }
 
 function syntheticSsn(userId: number) {
@@ -22,7 +21,7 @@ export function buildSandboxAccountPayload(
 
   return {
     contact: {
-      email_address: user.email,
+      email_address: `sandbox-${crypto.randomUUID()}@example.com`,
       phone_number: `415555${String(user.id % 10_000).padStart(4, "0")}`,
       street_address: ["123 Market Street"],
       city: "San Francisco",

@@ -47,6 +47,27 @@ function isDefinitePreCreationFailure(error: unknown) {
   )
 }
 
+async function readAlpacaError(response: Response) {
+  try {
+    const value: unknown = await response.json()
+    if (typeof value !== "object" || value === null) return {}
+
+    const error = value as Record<string, unknown>
+    return {
+      code:
+        typeof error.code === "string" || typeof error.code === "number"
+          ? error.code
+          : undefined,
+      message:
+        typeof error.message === "string"
+          ? error.message.slice(0, 500)
+          : undefined,
+    }
+  } catch {
+    return {}
+  }
+}
+
 async function updateFailure(
   id: number,
   provisioningStatus: Extract<AlpacaProvisioningStatus, "failed" | "unknown">,
@@ -75,15 +96,16 @@ async function createAccount(accountId: number, user: AlpacaProvisioningUser) {
     const requestId = response.headers.get("x-request-id") ?? undefined
 
     if (!response.ok) {
-      try {
-        await response.body?.cancel()
-      } catch {
-        // The HTTP status still proves that account creation was rejected.
-      }
+      const error = await readAlpacaError(response)
+      console.error("Alpaca rejected account creation.", {
+        status: response.status,
+        requestId,
+        ...error,
+      })
       return updateFailure(
         accountId,
         "failed",
-        `Alpaca rejected account creation with status ${response.status}.`,
+        `Alpaca rejected account creation with status ${response.status}${error.message ? `: ${error.message}` : ""}.`,
         requestId,
       )
     }
@@ -155,4 +177,3 @@ export async function ensureAlpacaAccount(user: AlpacaProvisioningUser) {
 
   return existing
 }
-
