@@ -13,6 +13,7 @@ import {
   buildSandboxAccountPayload,
   type AlpacaProvisioningUser,
 } from "./account-fixture"
+import { prepareSyntheticFundingSource } from "./funding"
 import { AlpacaTokenError } from "./token-service"
 
 const ACCOUNT_CREATION_TIMEOUT_MS = 10_000
@@ -143,6 +144,14 @@ async function createAccount(accountId: number, user: AlpacaProvisioningUser) {
       })
       .where(eq(alpacaAccounts.id, accountId))
       .returning()
+
+    try {
+      await prepareSyntheticFundingSource(value.id)
+    } catch {
+      console.error("Funding Source preparation failed after Provisioning.", {
+        requestId,
+      })
+    }
 
     return account
   } catch (error) {

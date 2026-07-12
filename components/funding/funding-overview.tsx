@@ -1,6 +1,6 @@
 "use client"
 
-import { useTransition } from "react"
+import { useActionState, useTransition } from "react"
 import { ArrowDownLeft, ArrowUpRight, Landmark, RefreshCw } from "lucide-react"
 import { useRouter } from "next/navigation"
 
@@ -22,6 +22,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty"
 import { Separator } from "@/components/ui/separator"
+import { prepareFunding } from "@/app/app/funding/actions"
 import type { FundingSnapshot, FundingTransfer } from "@/lib/alpaca/funding"
 
 const money = new Intl.NumberFormat("en-US", {
@@ -154,6 +155,11 @@ function TransferRow({ transfer }: { transfer: FundingTransfer }) {
 }
 
 export function FundingOverview({ snapshot }: { snapshot: FundingSnapshot }) {
+  const [prepareState, prepareAction, preparing] = useActionState(
+    prepareFunding,
+    undefined,
+  )
+
   if (snapshot.accountState !== "linked") {
     return <UnavailableOverview state={snapshot.accountState} />
   }
@@ -225,7 +231,14 @@ export function FundingOverview({ snapshot }: { snapshot: FundingSnapshot }) {
             <h2>Funding Source</h2>
           </CardTitle>
           <CardDescription>{snapshot.fundingSource.name}</CardDescription>
-          <CardAction>
+          <CardAction className="flex items-center gap-2">
+            {snapshot.fundingSource.state === "missing" ? (
+              <form action={prepareAction}>
+                <Button type="submit" disabled={preparing}>
+                  {preparing ? "Preparing funding…" : "Prepare funding"}
+                </Button>
+              </form>
+            ) : null}
             <Badge
               variant={
                 snapshot.fundingSource.state === "ready"
@@ -243,8 +256,8 @@ export function FundingOverview({ snapshot }: { snapshot: FundingSnapshot }) {
             </Badge>
           </CardAction>
         </CardHeader>
-        <CardContent>
-          <p
+        <CardContent className="flex flex-col gap-3">
+          <div
             role={
               snapshot.fundingSource.error
                 ? "alert"
@@ -253,8 +266,26 @@ export function FundingOverview({ snapshot }: { snapshot: FundingSnapshot }) {
                   : "status"
             }
           >
-            {snapshot.fundingSource.message}
-          </p>
+            <p>{snapshot.fundingSource.message}</p>
+            {prepareState?.status === "success" ? (
+              <p>{prepareState.message}</p>
+            ) : null}
+          </div>
+          {prepareState?.status === "error" ? (
+            <p role="alert" className="text-destructive">
+              {prepareState.message}
+            </p>
+          ) : null}
+          {snapshot.fundingSource.state === "preparing" ? (
+            <div className="flex gap-2">
+              <Button type="button" disabled>
+                Deposit
+              </Button>
+              <Button type="button" variant="outline" disabled>
+                Withdraw
+              </Button>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 

@@ -36,8 +36,8 @@ A directional mockup may differ from the final implementation. Mark it supersede
 
 This table is the repository-wide index of the individual effort READMEs. Whenever an effort README's related work, work status, or mockup status changes, update its row here in the same change.
 
-| Mockups                                 | Related work                                                                         | Work status | Mockup status |
-| --------------------------------------- | ------------------------------------------------------------------------------------ | ----------- | ------------- |
-| [Portfolio](./portfolio-page/README.md) | [Frontend routes and navigation](../.scratch/frontend-routes-and-navigation/spec.md) | planned     | directional   |
-| [Strategy](./strategy-page/README.md)   | [Frontend routes and navigation](../.scratch/frontend-routes-and-navigation/spec.md) | planned     | directional   |
-| [Funding](./funding-page/README.md)     | [Frontend routes and navigation](../.scratch/frontend-routes-and-navigation/spec.md) | planned     | directional   |
+| Mockups                                 | Related work                                                                                                                                               | Work status | Mockup status |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | ------------- |
+| [Portfolio](./portfolio-page/README.md) | [Frontend routes and navigation](../.scratch/frontend-routes-and-navigation/spec.md)                                                                       | planned     | directional   |
+| [Strategy](./strategy-page/README.md)   | [Frontend routes and navigation](../.scratch/frontend-routes-and-navigation/spec.md)                                                                       | planned     | directional   |
+| [Funding](./funding-page/README.md)     | [Frontend routes and navigation](../.scratch/frontend-routes-and-navigation/spec.md), [Alpaca account funding](../.scratch/alpaca-account-funding/spec.md) | in-progress | directional   |

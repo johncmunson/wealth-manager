@@ -1,6 +1,104 @@
-import { describe, expect, it } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
+
+const mocks = vi.hoisted(() => ({
+  brokerRequest: vi.fn(),
+  prepareFundingSource: vi.fn(),
+  createdAccount: { id: 7, userId: 42 },
+  updates: [] as Record<string, unknown>[],
+}))
+
+vi.mock("../../lib/alpaca/broker-client", () => ({
+  AlpacaBrokerAuthenticationError: class extends Error {},
+  AlpacaBrokerRequestError: class extends Error {},
+  alpacaBrokerRequest: mocks.brokerRequest,
+}))
+vi.mock("../../lib/alpaca/token-service", () => ({
+  AlpacaTokenError: class extends Error {},
+}))
+vi.mock("../../lib/alpaca/funding", () => ({
+  prepareSyntheticFundingSource: mocks.prepareFundingSource,
+}))
+vi.mock("../../db", () => ({
+  db: {
+    insert: () => ({
+      values: () => ({
+        onConflictDoNothing: () => ({
+          returning: async () => [mocks.createdAccount],
+        }),
+      }),
+    }),
+    update: () => ({
+      set: (value: Record<string, unknown>) => {
+        mocks.updates.push(value)
+        return {
+          where: () => ({
+            returning: async () => [{ ...mocks.createdAccount, ...value }],
+          }),
+        }
+      },
+    }),
+  },
+}))
 
 import { buildSandboxAccountPayload } from "../../lib/alpaca/account-fixture"
+import { ensureAlpacaAccount } from "../../lib/alpaca/account-provisioning"
+
+beforeEach(() => {
+  mocks.createdAccount = { id: 7, userId: 42 }
+  mocks.updates = []
+  mocks.prepareFundingSource.mockResolvedValue({ state: "ready" })
+})
+
+describe("Alpaca account Provisioning", () => {
+  it("prepares funding only after Alpaca creates and links the Brokerage Account", async () => {
+    mocks.brokerRequest.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          id: "alpaca-account-123",
+          account_number: "PA123",
+          status: "ACTIVE",
+        }),
+      ),
+    )
+
+    await expect(ensureAlpacaAccount({ id: 42 })).resolves.toMatchObject({
+      provisioningStatus: "linked",
+      alpacaAccountId: "alpaca-account-123",
+    })
+    expect(mocks.updates[0]).toMatchObject({ provisioningStatus: "linked" })
+    expect(mocks.prepareFundingSource).toHaveBeenCalledWith(
+      "alpaca-account-123",
+    )
+  })
+
+  it("preserves the linked account when Funding Source preparation fails", async () => {
+    mocks.brokerRequest.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          id: "alpaca-account-123",
+          account_number: "PA123",
+          status: "ACTIVE",
+        }),
+      ),
+    )
+    mocks.prepareFundingSource.mockRejectedValue(new Error("timeout"))
+
+    await expect(ensureAlpacaAccount({ id: 42 })).resolves.toMatchObject({
+      provisioningStatus: "linked",
+      alpacaAccountId: "alpaca-account-123",
+    })
+    expect(mocks.updates).toHaveLength(1)
+  })
+
+  it("does not prepare funding when account creation is rejected", async () => {
+    mocks.brokerRequest.mockResolvedValue(new Response(null, { status: 400 }))
+
+    await expect(ensureAlpacaAccount({ id: 42 })).resolves.toMatchObject({
+      provisioningStatus: "failed",
+    })
+    expect(mocks.prepareFundingSource).not.toHaveBeenCalled()
+  })
+})
 
 describe("Alpaca sandbox account fixtures", () => {
   it("builds user-specific fully-disclosed data with unique sandbox emails", () => {

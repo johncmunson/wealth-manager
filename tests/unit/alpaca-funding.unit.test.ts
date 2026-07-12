@@ -23,7 +23,11 @@ vi.mock("../../db", () => ({
   },
 }))
 
-import { getFundingSnapshot } from "../../lib/alpaca/funding"
+import {
+  getFundingSnapshot,
+  prepareCurrentUserFundingSource,
+  prepareSyntheticFundingSource,
+} from "../../lib/alpaca/funding"
 
 function json(value: unknown, status = 200) {
   return new Response(JSON.stringify(value), {
@@ -44,10 +48,206 @@ function queueSnapshotResponses(
 }
 
 beforeEach(() => {
+  mocks.request.mockReset()
+  mocks.userId.mockReset().mockResolvedValue(42)
   mocks.account = {
     alpacaAccountId: "account-123",
     provisioningStatus: "linked",
   }
+})
+
+const syntheticRelationship = {
+  id: "synthetic-source",
+  status: "APPROVED",
+  bank_account_number: "0000004242",
+}
+
+describe("Funding Source preparation", () => {
+  it.each(["APPROVED", "QUEUED", "PENDING"])(
+    "reuses an active synthetic relationship in %s status",
+    async (status) => {
+      mocks.request.mockResolvedValueOnce(
+        json([{ ...syntheticRelationship, status }]),
+      )
+
+      await expect(
+        prepareSyntheticFundingSource("account-123"),
+      ).resolves.toMatchObject({
+        state: status === "APPROVED" ? "ready" : "preparing",
+        relationshipId: "synthetic-source",
+      })
+      expect(mocks.request).toHaveBeenCalledOnce()
+    },
+  )
+
+  it("prefers an active synthetic relationship over an older rejected one", async () => {
+    mocks.request.mockResolvedValueOnce(
+      json([
+        { ...syntheticRelationship, id: "rejected", status: "REJECTED" },
+        { ...syntheticRelationship, id: "active", status: "QUEUED" },
+      ]),
+    )
+
+    await expect(
+      prepareSyntheticFundingSource("account-123"),
+    ).resolves.toMatchObject({
+      state: "preparing",
+      relationshipId: "active",
+    })
+    expect(mocks.request).toHaveBeenCalledOnce()
+  })
+
+  it.each(["REJECTED", "CANCEL_REQUESTED"])(
+    "does not replace an existing synthetic relationship in %s status",
+    async (status) => {
+      mocks.request.mockResolvedValueOnce(
+        json([{ ...syntheticRelationship, status }]),
+      )
+
+      await expect(
+        prepareSyntheticFundingSource("account-123"),
+      ).resolves.toMatchObject({ state: "failed" })
+      expect(mocks.request).toHaveBeenCalledOnce()
+    },
+  )
+
+  it("reuses the sole active relationship when Alpaca omits its account number", async () => {
+    mocks.request.mockResolvedValueOnce(
+      json([{ id: "redacted-source", status: "APPROVED" }]),
+    )
+
+    await expect(
+      prepareSyntheticFundingSource("account-123"),
+    ).resolves.toMatchObject({
+      state: "ready",
+      relationshipId: "redacted-source",
+    })
+    expect(mocks.request).toHaveBeenCalledOnce()
+  })
+
+  it.each([
+    ["APPROVED", "ready"],
+    ["QUEUED", "preparing"],
+    ["PENDING", "preparing"],
+    ["REJECTED", "failed"],
+    ["CANCEL_REQUESTED", "failed"],
+  ])("maps a created relationship in %s status", async (status, state) => {
+    mocks.request
+      .mockResolvedValueOnce(json([]))
+      .mockResolvedValueOnce(json({ ...syntheticRelationship, status }))
+
+    await expect(
+      prepareSyntheticFundingSource("account-123"),
+    ).resolves.toMatchObject({ state })
+    expect(mocks.request).toHaveBeenNthCalledWith(
+      2,
+      "/v1/accounts/account-123/ach_relationships",
+      expect.objectContaining({
+        method: "POST",
+        authenticationReplay: "never",
+      }),
+    )
+    const body = JSON.parse(mocks.request.mock.calls[1][1].body as string)
+    expect(body).toMatchObject({
+      account_owner_name: "Wealth Manager Sandbox",
+      bank_account_type: "CHECKING",
+      bank_account_number: expect.stringMatching(/4242$/),
+      bank_routing_number: "121000358",
+    })
+  })
+
+  it("lists again after Alpaca reports an active relationship conflict", async () => {
+    mocks.request
+      .mockResolvedValueOnce(json([]))
+      .mockResolvedValueOnce(json({ message: "active relationship" }, 409))
+      .mockResolvedValueOnce(json([syntheticRelationship]))
+
+    await expect(
+      prepareSyntheticFundingSource("account-123"),
+    ).resolves.toMatchObject({
+      state: "ready",
+      relationshipId: "synthetic-source",
+    })
+    expect(mocks.request).toHaveBeenCalledTimes(3)
+  })
+
+  it("treats an unreadable successful creation response as ambiguous", async () => {
+    mocks.request
+      .mockResolvedValueOnce(json([]))
+      .mockResolvedValueOnce(json({ id: "incomplete" }))
+
+    await expect(prepareSyntheticFundingSource("account-123")).resolves.toEqual(
+      {
+        state: "unknown",
+        message:
+          "Funding Source preparation may have started. Refresh before trying again.",
+      },
+    )
+    expect(mocks.request).toHaveBeenCalledTimes(2)
+  })
+
+  it("returns concise feedback for a definitive rejection", async () => {
+    mocks.request
+      .mockResolvedValueOnce(json([]))
+      .mockResolvedValueOnce(json({ message: "fixture rejected" }, 400))
+
+    await expect(prepareSyntheticFundingSource("account-123")).resolves.toEqual(
+      {
+        state: "failed",
+        message: "Funding Source preparation was rejected by Alpaca.",
+      },
+    )
+  })
+
+  it("does not replay an ambiguous creation outcome and lists first on the next attempt", async () => {
+    mocks.request
+      .mockResolvedValueOnce(json([]))
+      .mockRejectedValueOnce(new TypeError("network failure"))
+      .mockResolvedValueOnce(
+        json([{ ...syntheticRelationship, status: "QUEUED" }]),
+      )
+
+    await expect(prepareSyntheticFundingSource("account-123")).resolves.toEqual(
+      {
+        state: "unknown",
+        message:
+          "Funding Source preparation may have started. Refresh before trying again.",
+      },
+    )
+    await expect(
+      prepareSyntheticFundingSource("account-123"),
+    ).resolves.toMatchObject({ state: "preparing" })
+
+    expect(
+      mocks.request.mock.calls.map(([, options]) => options.method ?? "GET"),
+    ).toEqual(["GET", "POST", "GET"])
+  })
+
+  it("authenticates independently and derives the linked Brokerage Account", async () => {
+    mocks.request.mockResolvedValueOnce(json([syntheticRelationship]))
+
+    await expect(prepareCurrentUserFundingSource()).resolves.toMatchObject({
+      state: "ready",
+    })
+    expect(mocks.userId).toHaveBeenCalledOnce()
+    expect(mocks.request).toHaveBeenCalledWith(
+      "/v1/accounts/account-123/ach_relationships",
+      expect.anything(),
+    )
+  })
+
+  it("cannot prepare a Brokerage Account not linked to the current User", async () => {
+    mocks.account = {
+      alpacaAccountId: null,
+      provisioningStatus: "missing",
+    }
+
+    await expect(prepareCurrentUserFundingSource()).resolves.toEqual({
+      state: "failed",
+      message: "A linked Brokerage Account is required.",
+    })
+    expect(mocks.request).not.toHaveBeenCalled()
+  })
 })
 
 describe("Funding snapshot", () => {

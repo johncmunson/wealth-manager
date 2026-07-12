@@ -1,12 +1,27 @@
-import { expect, test, vi } from "vitest"
-import { page } from "vitest/browser"
+import { beforeEach, expect, test, vi } from "vitest"
+import { page, userEvent } from "vitest/browser"
 import { render } from "vitest-browser-react"
 
 import { FundingOverview } from "../../components/funding/funding-overview"
 import type { FundingSnapshot } from "../../lib/alpaca/funding"
 
-const refresh = vi.hoisted(() => vi.fn())
-vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }))
+const mocks = vi.hoisted(() => ({
+  prepareFunding: vi.fn(),
+  refresh: vi.fn(),
+}))
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: mocks.refresh }),
+}))
+vi.mock("../../app/app/funding/actions", () => ({
+  prepareFunding: mocks.prepareFunding,
+}))
+
+beforeEach(() => {
+  mocks.prepareFunding.mockResolvedValue({
+    status: "success",
+    message: "Funding Source prepared.",
+  })
+})
 
 const snapshot = {
   accountState: "linked",
@@ -99,9 +114,7 @@ test.each([
     await expect.element(screen.getByText(badge, { exact: true })).toBeVisible()
     await expect.element(screen.getByRole("status")).toHaveTextContent(message)
     await expect.element(screen.getByText("$12,840.00")).toBeVisible()
-    await expect
-      .element(screen.getByText("Deposit", { exact: true }))
-      .toBeVisible()
+    await expect.element(screen.getByText("+$2,500.00")).toBeVisible()
   },
 )
 
@@ -168,10 +181,122 @@ test.each([
   },
 )
 
+test("offers keyboard-accessible preparation once when the Funding Source is missing", async () => {
+  const screen = await render(
+    <FundingOverview
+      snapshot={{
+        ...snapshot,
+        fundingSource: {
+          state: "missing",
+          name: "Chase Checking •••• 4242",
+          message: "No Funding Source is available yet.",
+        },
+      }}
+    />,
+  )
+  const button = screen.getByRole("button", { name: "Prepare funding" })
+
+  await userEvent.tab()
+  await userEvent.tab()
+  await expect.element(button).toHaveFocus()
+  await userEvent.keyboard("{Enter}")
+
+  expect(mocks.prepareFunding).toHaveBeenCalledOnce()
+  await expect
+    .element(screen.getByRole("status"))
+    .toHaveTextContent("Funding Source prepared.")
+})
+
+test("announces preparation errors and leaves preparation available", async () => {
+  mocks.prepareFunding.mockResolvedValue({
+    status: "error",
+    message: "Funding Source preparation was rejected by Alpaca.",
+  })
+  const screen = await render(
+    <FundingOverview
+      snapshot={{
+        ...snapshot,
+        fundingSource: {
+          state: "missing",
+          name: "Chase Checking •••• 4242",
+          message: "No Funding Source is available yet.",
+        },
+      }}
+    />,
+  )
+
+  await screen.getByRole("button", { name: "Prepare funding" }).click()
+
+  await expect
+    .element(screen.getByRole("alert"))
+    .toHaveTextContent("Funding Source preparation was rejected by Alpaca.")
+  await expect
+    .element(screen.getByRole("button", { name: "Prepare funding" }))
+    .toBeEnabled()
+})
+
+test("shows pending preparation and prevents duplicate submission", async () => {
+  let finish!: (value: { status: "success"; message: string }) => void
+  mocks.prepareFunding.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve
+      }),
+  )
+  const screen = await render(
+    <FundingOverview
+      snapshot={{
+        ...snapshot,
+        fundingSource: {
+          state: "missing",
+          name: "Chase Checking •••• 4242",
+          message: "No Funding Source is available yet.",
+        },
+      }}
+    />,
+  )
+  const button = screen.getByRole("button", { name: "Prepare funding" })
+
+  await button.click()
+
+  await expect
+    .element(screen.getByRole("button", { name: "Preparing funding…" }))
+    .toBeDisabled()
+  finish({ status: "success", message: "Funding Source prepared." })
+  await expect
+    .element(screen.getByRole("status"))
+    .toHaveTextContent("Funding Source prepared.")
+})
+
+test("keeps Transfer affordances disabled while the Funding Source is being prepared", async () => {
+  const screen = await render(
+    <FundingOverview
+      snapshot={{
+        ...snapshot,
+        fundingSource: {
+          state: "preparing",
+          name: "Chase Checking •••• 4242",
+          message: "Funding source is being prepared.",
+        },
+      }}
+    />,
+  )
+
+  await expect
+    .element(screen.getByRole("button", { name: "Deposit" }))
+    .toBeDisabled()
+  await expect
+    .element(screen.getByRole("button", { name: "Withdraw" }))
+    .toBeDisabled()
+  await expect
+    .element(screen.getByRole("status"))
+    .toHaveTextContent("Funding source is being prepared.")
+})
+
 test("refreshes the server-rendered snapshot from an accessible control", async () => {
   const screen = await render(<FundingOverview snapshot={snapshot} />)
 
   await screen.getByRole("button", { name: "Refresh" }).click()
 
-  expect(refresh).toHaveBeenCalledOnce()
+  expect(mocks.refresh).toHaveBeenCalledOnce()
 })

@@ -73,7 +73,16 @@ const RELATIONSHIP_STATUSES = new Set([
 ])
 const DECIMAL = /^-?\d+(?:\.\d+)?$/
 const POSITIVE_DECIMAL = /^\d+(?:\.\d+)?$/
-const SOURCE_NAME = "Chase Checking •••• 4242" as const
+const SYNTHETIC_ACCOUNT_SUFFIX = "4242" as const
+const SYNTHETIC_ACCOUNT_NUMBER = `000000${SYNTHETIC_ACCOUNT_SUFFIX}` as const
+const SOURCE_NAME = `Chase Checking •••• ${SYNTHETIC_ACCOUNT_SUFFIX}` as const
+const SYNTHETIC_ACH_DETAILS = {
+  account_owner_name: "Wealth Manager Sandbox",
+  bank_account_type: "CHECKING",
+  bank_account_number: SYNTHETIC_ACCOUNT_NUMBER,
+  bank_routing_number: "121000358",
+  nickname: "Chase Checking",
+} as const
 
 interface TradingAccount {
   readonly buying_power?: string
@@ -221,22 +230,166 @@ function mapTransfers(
     }))
 }
 
-function mapFundingSource(relationships: readonly AlpacaAchRelationship[]) {
-  const matching = relationships.filter(({ bankAccountNumber }) =>
-    bankAccountNumber?.endsWith("4242"),
-  )
-  const candidates =
-    matching.length > 0
-      ? matching
-      : relationships.length === 1
-        ? relationships
-        : []
-  const relationship =
+function relationshipState(status: string): FundingSourceState {
+  if (status === "APPROVED") return "ready"
+  if (status === "QUEUED" || status === "PENDING") return "preparing"
+  return "unavailable"
+}
+
+function isSyntheticRelationship({ bankAccountNumber }: AlpacaAchRelationship) {
+  return bankAccountNumber?.endsWith(SYNTHETIC_ACCOUNT_SUFFIX) ?? false
+}
+
+function syntheticRelationshipCandidates(
+  relationships: readonly AlpacaAchRelationship[],
+) {
+  const matching = relationships.filter(isSyntheticRelationship)
+  return matching.length > 0
+    ? matching
+    : relationships.length === 1 &&
+        relationships[0].bankAccountNumber === undefined
+      ? relationships
+      : []
+}
+
+function findSyntheticRelationship(
+  relationships: readonly AlpacaAchRelationship[],
+) {
+  const candidates = syntheticRelationshipCandidates(relationships)
+  return (
     candidates.find(({ status }) => status === "APPROVED") ??
     candidates.find(
-      ({ status }) => status === "QUEUED" || status === "PENDING",
+      ({ status }) => relationshipState(status) === "preparing",
     ) ??
     candidates[0]
+  )
+}
+
+function preparedRelationshipResult(relationship: AlpacaAchRelationship) {
+  const state = relationshipState(relationship.status)
+  return state === "ready" || state === "preparing"
+    ? { state, relationshipId: relationship.id }
+    : {
+        state: "failed" as const,
+        message: "Funding Source preparation was rejected by Alpaca.",
+      }
+}
+
+async function listRelationships(alpacaAccountId: string) {
+  return readAlpaca(
+    alpacaBrokerRequest(
+      `/v1/accounts/${encodeURIComponent(alpacaAccountId)}/ach_relationships`,
+      {
+        cache: "no-store",
+        authenticationReplay: "safe-once",
+      },
+    ),
+    parseRelationships,
+  )
+}
+
+export async function prepareSyntheticFundingSource(alpacaAccountId: string) {
+  let relationships: AlpacaAchRelationship[]
+  try {
+    relationships = await listRelationships(alpacaAccountId)
+  } catch {
+    return {
+      state: "failed" as const,
+      message: "Funding Source preparation could not be started.",
+    }
+  }
+
+  const existing = findSyntheticRelationship(relationships)
+  if (existing) return preparedRelationshipResult(existing)
+
+  let response: Response
+  try {
+    response = await alpacaBrokerRequest(
+      `/v1/accounts/${encodeURIComponent(alpacaAccountId)}/ach_relationships`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(SYNTHETIC_ACH_DETAILS),
+        cache: "no-store",
+        authenticationReplay: "never",
+      },
+    )
+  } catch {
+    return {
+      state: "unknown" as const,
+      message:
+        "Funding Source preparation may have started. Refresh before trying again.",
+    }
+  }
+
+  if (response.status === 409) {
+    try {
+      const recovered = findSyntheticRelationship(
+        await listRelationships(alpacaAccountId),
+      )
+      return recovered
+        ? preparedRelationshipResult(recovered)
+        : {
+            state: "failed" as const,
+            message: "Funding Source preparation was rejected by Alpaca.",
+          }
+    } catch {
+      return {
+        state: "unknown" as const,
+        message:
+          "Funding Source preparation could not be confirmed. Refresh to check its status.",
+      }
+    }
+  }
+
+  if (!response.ok) {
+    return response.status >= 500
+      ? {
+          state: "unknown" as const,
+          message:
+            "Funding Source preparation may have started. Refresh before trying again.",
+        }
+      : {
+          state: "failed" as const,
+          message: "Funding Source preparation was rejected by Alpaca.",
+        }
+  }
+
+  try {
+    const [created] = parseRelationships([await response.json()])
+    return preparedRelationshipResult(created)
+  } catch {
+    return {
+      state: "unknown" as const,
+      message:
+        "Funding Source preparation may have started. Refresh before trying again.",
+    }
+  }
+}
+
+export async function prepareCurrentUserFundingSource() {
+  const userId = await getCurrentUserId()
+  const [account] = await db
+    .select({
+      alpacaAccountId: alpacaAccounts.alpacaAccountId,
+      provisioningStatus: alpacaAccounts.provisioningStatus,
+    })
+    .from(alpacaAccounts)
+    .where(eq(alpacaAccounts.userId, userId))
+    .limit(1)
+
+  if (account?.provisioningStatus !== "linked" || !account.alpacaAccountId) {
+    return {
+      state: "failed" as const,
+      message: "A linked Brokerage Account is required.",
+    }
+  }
+
+  return prepareSyntheticFundingSource(account.alpacaAccountId)
+}
+
+function mapFundingSource(relationships: readonly AlpacaAchRelationship[]) {
+  const relationship = findSyntheticRelationship(relationships)
 
   if (!relationship) {
     return {
@@ -245,24 +398,16 @@ function mapFundingSource(relationships: readonly AlpacaAchRelationship[]) {
       message: "No Funding Source is available yet.",
     }
   }
-  if (relationship.status === "APPROVED") {
-    return {
-      state: "ready" as const,
-      name: SOURCE_NAME,
-      message: "Sandbox deposits and withdrawals are simulated.",
-    }
-  }
-  if (relationship.status === "QUEUED" || relationship.status === "PENDING") {
-    return {
-      state: "preparing" as const,
-      name: SOURCE_NAME,
-      message: "Funding source is being prepared.",
-    }
-  }
+  const state = relationshipState(relationship.status)
   return {
-    state: "unavailable" as const,
+    state,
     name: SOURCE_NAME,
-    message: "The Funding Source is unavailable.",
+    message:
+      state === "ready"
+        ? "Sandbox deposits and withdrawals are simulated."
+        : state === "preparing"
+          ? "Funding source is being prepared."
+          : "The Funding Source is unavailable.",
   }
 }
 
