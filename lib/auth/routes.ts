@@ -1,1 +1,1 @@
-export const POST_SIGN_IN_URL = "/app"
+export const POST_SIGN_IN_URL = "/app/portfolio"

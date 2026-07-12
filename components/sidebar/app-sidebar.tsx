@@ -1,6 +1,7 @@
 "use client"
 
-import { useRouter } from "next/navigation"
+import Link from "next/link"
+import { usePathname, useRouter } from "next/navigation"
 import { useState } from "react"
 
 import {
@@ -44,13 +45,14 @@ import {
 } from "@/components/ui/sidebar"
 
 const navItems = [
-  { title: "Portfolio", icon: LayoutDashboard },
-  { title: "Strategy", icon: Target },
-  { title: "Activity", icon: Activity },
-  { title: "Funding", icon: DollarSign },
+  { title: "Portfolio", href: "/app/portfolio", icon: LayoutDashboard },
+  { title: "Strategy", href: "/app/strategy", icon: Target },
+  { title: "Activity", href: "/app/activity", icon: Activity },
+  { title: "Funding", href: "/app/funding", icon: DollarSign },
 ]
 
 export function AppSidebar() {
+  const pathname = usePathname()
   const router = useRouter()
   const [isSigningOut, setIsSigningOut] = useState(false)
 
@@ -97,6 +99,8 @@ export function AppSidebar() {
               {navItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
+                    render={<Link href={item.href} />}
+                    isActive={pathname === item.href}
                     size="lg"
                     className="text-base [&>svg]:size-5"
                   >
