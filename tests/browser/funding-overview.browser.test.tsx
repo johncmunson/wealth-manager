@@ -6,6 +6,7 @@ import { FundingOverview } from "../../components/funding/funding-overview"
 import type { FundingSnapshot } from "../../lib/alpaca/funding"
 
 const mocks = vi.hoisted(() => ({
+  depositFunding: vi.fn(),
   prepareFunding: vi.fn(),
   refresh: vi.fn(),
 }))
@@ -13,11 +14,16 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: mocks.refresh }),
 }))
 vi.mock("../../app/app/funding/actions", () => ({
+  depositFunding: mocks.depositFunding,
   prepareFunding: mocks.prepareFunding,
 }))
 
 beforeEach(() => {
-  mocks.prepareFunding.mockResolvedValue({
+  mocks.depositFunding.mockReset().mockResolvedValue({
+    status: "success",
+    message: "Deposit submitted.",
+  })
+  mocks.prepareFunding.mockReset().mockResolvedValue({
     status: "success",
     message: "Funding Source prepared.",
   })
@@ -148,7 +154,7 @@ test("keeps Transfer information labeled on a narrow screen", async () => {
     .element(screen.getByText("Amount", { exact: true }).nth(0))
     .toBeVisible()
   await expect
-    .element(screen.getByText("Deposit", { exact: true }).nth(1))
+    .element(screen.getByText("Deposit", { exact: true }))
     .toBeVisible()
 })
 
@@ -265,6 +271,145 @@ test("shows pending preparation and prevents duplicate submission", async () => 
     .toHaveTextContent("Funding Source prepared.")
 })
 
+test("opens the deposit dialog from the keyboard and focuses its only input", async () => {
+  const screen = await render(<FundingOverview snapshot={snapshot} />)
+  const addFunds = screen.getByRole("button", { name: "Add funds" })
+
+  await userEvent.tab()
+  await userEvent.tab()
+  await expect.element(addFunds).toHaveFocus()
+  await userEvent.keyboard("{Enter}")
+
+  await expect.element(screen.getByRole("dialog")).toBeVisible()
+  await expect
+    .element(screen.getByRole("heading", { name: "Add funds" }))
+    .toBeVisible()
+  await expect.element(screen.getByLabelText("Amount")).toHaveFocus()
+  expect(await screen.getByRole("textbox").all()).toHaveLength(1)
+  await expect
+    .element(
+      screen.getByText(
+        "Whole USD only. Funding Source: Chase Checking •••• 4242",
+      ),
+    )
+    .toBeVisible()
+
+  await userEvent.keyboard("{Escape}")
+  await expect.element(screen.getByRole("dialog")).not.toBeInTheDocument()
+  await expect.element(addFunds).toHaveFocus()
+})
+
+test.each(["0", "-1", "1.25", "abc"])(
+  "rejects invalid deposit amount %j before review",
+  async (amount) => {
+    const screen = await render(<FundingOverview snapshot={snapshot} />)
+    await screen.getByRole("button", { name: "Add funds" }).click()
+    await screen.getByLabelText("Amount").fill(amount)
+    await userEvent.tab()
+    await userEvent.keyboard("{Enter}")
+
+    await expect
+      .element(screen.getByRole("alert"))
+      .toHaveTextContent("Enter a positive whole-dollar amount.")
+    expect(mocks.depositFunding).not.toHaveBeenCalled()
+  },
+)
+
+test("reviews the whole-dollar amount and requires explicit confirmation", async () => {
+  const screen = await render(<FundingOverview snapshot={snapshot} />)
+  await screen.getByRole("button", { name: "Add funds" }).click()
+  await screen.getByLabelText("Amount").fill("2500")
+  await userEvent.tab()
+  await userEvent.keyboard("{Enter}")
+
+  await expect
+    .element(screen.getByRole("heading", { name: "Review deposit" }))
+    .toBeVisible()
+  await expect
+    .element(screen.getByText("$2,500.00", { exact: true }))
+    .toBeVisible()
+  await expect
+    .element(screen.getByText("Chase Checking •••• 4242").nth(1))
+    .toBeVisible()
+  expect(mocks.depositFunding).not.toHaveBeenCalled()
+
+  await userEvent.tab()
+  await userEvent.tab()
+  await userEvent.keyboard("{Enter}")
+
+  expect(mocks.depositFunding).toHaveBeenCalledOnce()
+  const submitted = mocks.depositFunding.mock.calls[0][1] as FormData
+  expect(submitted.get("amount")).toBe("2500")
+  await expect
+    .element(screen.getByRole("heading", { name: "Deposit submitted" }))
+    .toBeVisible()
+})
+
+test("disables confirmation while pending so it cannot dispatch twice", async () => {
+  let finish!: (value: { status: "success"; message: string }) => void
+  mocks.depositFunding.mockImplementation(
+    () => new Promise((resolve) => (finish = resolve)),
+  )
+  const screen = await render(<FundingOverview snapshot={snapshot} />)
+  await screen.getByRole("button", { name: "Add funds" }).click()
+  await screen.getByLabelText("Amount").fill("25")
+  await userEvent.tab()
+  await userEvent.keyboard("{Enter}")
+
+  await userEvent.tab()
+  await userEvent.tab()
+  await userEvent.keyboard("{Enter}")
+
+  await expect
+    .element(screen.getByRole("button", { name: "Submitting deposit…" }))
+    .toBeDisabled()
+  expect(mocks.depositFunding).toHaveBeenCalledOnce()
+  finish({ status: "success", message: "Deposit submitted." })
+  await expect
+    .element(screen.getByRole("heading", { name: "Deposit submitted" }))
+    .toBeVisible()
+})
+
+test.each([
+  ["error", "Deposits are not permitted for this Brokerage Account."],
+  [
+    "unknown",
+    "Deposit outcome is unknown. Check recent Transfers before trying again.",
+  ],
+] as const)(
+  "announces a %s deposit outcome without optimistic changes",
+  async (status, message) => {
+    mocks.depositFunding.mockResolvedValue({ status, message })
+    const screen = await render(<FundingOverview snapshot={snapshot} />)
+    await screen.getByRole("button", { name: "Add funds" }).click()
+    await screen.getByLabelText("Amount").fill("25")
+    await userEvent.tab()
+    await userEvent.keyboard("{Enter}")
+    await userEvent.tab()
+    await userEvent.tab()
+    await userEvent.keyboard("{Enter}")
+
+    await expect.element(screen.getByRole("alert")).toHaveTextContent(message)
+    await expect.element(screen.getByText("$10,340.00")).toBeVisible()
+    await expect.element(screen.getByText("+$2,500.00")).toBeVisible()
+  },
+)
+
+test("disables deposits while the Brokerage Account blocks Transfers", async () => {
+  const screen = await render(
+    <FundingOverview snapshot={{ ...snapshot, transfersBlocked: true }} />,
+  )
+
+  await expect
+    .element(
+      screen.getByText("Transfers are blocked for this Brokerage Account."),
+    )
+    .toBeVisible()
+  await expect
+    .element(screen.getByRole("button", { name: "Add funds" }))
+    .toBeDisabled()
+})
+
 test("shows Transfer affordances only after the Funding Source is ready", async () => {
   const preparingScreen = await render(
     <FundingOverview
@@ -280,7 +425,7 @@ test("shows Transfer affordances only after the Funding Source is ready", async 
   )
 
   await expect
-    .element(preparingScreen.getByRole("button", { name: "Deposit" }))
+    .element(preparingScreen.getByRole("button", { name: "Add funds" }))
     .not.toBeInTheDocument()
   await expect
     .element(preparingScreen.getByRole("button", { name: "Withdraw" }))
@@ -288,7 +433,7 @@ test("shows Transfer affordances only after the Funding Source is ready", async 
 
   const readyScreen = await render(<FundingOverview snapshot={snapshot} />)
   await expect
-    .element(readyScreen.getByRole("button", { name: "Deposit" }))
+    .element(readyScreen.getByRole("button", { name: "Add funds" }))
     .toBeVisible()
   await expect
     .element(readyScreen.getByRole("button", { name: "Withdraw" }))

@@ -57,6 +57,9 @@ export default defineConfig({
       },
       {
         plugins: [react()],
+        optimizeDeps: {
+          include: ["@base-ui/react/dialog", "@base-ui/react/input"],
+        },
         resolve: {
           alias: {
             "@": fileURLToPath(new URL(".", import.meta.url)),

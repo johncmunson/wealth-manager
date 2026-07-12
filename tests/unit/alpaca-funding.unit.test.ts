@@ -27,6 +27,7 @@ import {
   getFundingSnapshot,
   prepareCurrentUserFundingSource,
   prepareSyntheticFundingSource,
+  submitCurrentUserDeposit,
 } from "../../lib/alpaca/funding"
 
 function json(value: unknown, status = 200) {
@@ -273,6 +274,149 @@ describe("Funding Source preparation", () => {
     })
     expect(mocks.request).not.toHaveBeenCalled()
   })
+})
+
+describe("Deposits", () => {
+  it.each(["", "0", "-1", "1.00", "1.5", ".5", "1e2", "abc", " 1", "01"])(
+    "rejects invalid whole-dollar amount %j before calling Alpaca",
+    async (amount) => {
+      await expect(submitCurrentUserDeposit(amount)).resolves.toEqual({
+        state: "failed",
+        message: "Enter a positive whole-dollar amount.",
+      })
+      expect(mocks.userId).toHaveBeenCalledOnce()
+      expect(mocks.request).not.toHaveBeenCalled()
+    },
+  )
+
+  it("authenticates and derives the Brokerage Account and approved Funding Source", async () => {
+    mocks.request
+      .mockResolvedValueOnce(json({ transfers_blocked: false }))
+      .mockResolvedValueOnce(json([syntheticRelationship]))
+      .mockResolvedValueOnce(json({ id: "deposit-1" }))
+
+    await expect(submitCurrentUserDeposit("2500")).resolves.toEqual({
+      state: "accepted",
+      message: "Deposit submitted.",
+    })
+    expect(mocks.userId).toHaveBeenCalledOnce()
+    expect(mocks.request).toHaveBeenNthCalledWith(
+      3,
+      "/v1/accounts/account-123/transfers",
+      expect.objectContaining({
+        method: "POST",
+        authenticationReplay: "never",
+      }),
+    )
+    expect(JSON.parse(mocks.request.mock.calls[2][1].body as string)).toEqual({
+      transfer_type: "ach",
+      relationship_id: "synthetic-source",
+      amount: "2500",
+      direction: "INCOMING",
+    })
+  })
+
+  it("rejects an unauthenticated request before calling Alpaca", async () => {
+    mocks.userId.mockRejectedValueOnce(new Error("Unauthenticated"))
+
+    await expect(submitCurrentUserDeposit("10")).rejects.toThrow(
+      "Unauthenticated",
+    )
+    expect(mocks.request).not.toHaveBeenCalled()
+  })
+
+  it("rejects a User without a linked Brokerage Account", async () => {
+    mocks.account = { alpacaAccountId: null, provisioningStatus: "pending" }
+
+    await expect(submitCurrentUserDeposit("10")).resolves.toEqual({
+      state: "failed",
+      message: "A linked Brokerage Account is required.",
+    })
+    expect(mocks.request).not.toHaveBeenCalled()
+  })
+
+  it("rechecks the global Transfer block before mutation", async () => {
+    mocks.request
+      .mockResolvedValueOnce(json({ transfers_blocked: true }))
+      .mockResolvedValueOnce(json([syntheticRelationship]))
+
+    await expect(submitCurrentUserDeposit("10")).resolves.toEqual({
+      state: "failed",
+      message: "Transfers are blocked for this Brokerage Account.",
+    })
+    expect(mocks.request).toHaveBeenCalledTimes(2)
+  })
+
+  it.each(["QUEUED", "PENDING", "REJECTED"])(
+    "requires an approved Funding Source, not one in %s status",
+    async (status) => {
+      mocks.request
+        .mockResolvedValueOnce(json({ transfers_blocked: false }))
+        .mockResolvedValueOnce(json([{ ...syntheticRelationship, status }]))
+
+      await expect(submitCurrentUserDeposit("10")).resolves.toEqual({
+        state: "failed",
+        message: "An approved Funding Source is required.",
+      })
+      expect(mocks.request).toHaveBeenCalledTimes(2)
+    },
+  )
+
+  it("surfaces Alpaca's direction-specific deposit restriction", async () => {
+    mocks.request
+      .mockResolvedValueOnce(json({ transfers_blocked: false }))
+      .mockResolvedValueOnce(json([syntheticRelationship]))
+      .mockResolvedValueOnce(
+        json({ message: "deposits are not permitted" }, 403),
+      )
+
+    await expect(submitCurrentUserDeposit("10")).resolves.toEqual({
+      state: "failed",
+      message: "Deposits are not permitted for this Brokerage Account.",
+    })
+  })
+
+  it.each([400, 422])(
+    "returns definitive feedback for Alpaca status %s",
+    async (status) => {
+      mocks.request
+        .mockResolvedValueOnce(json({ transfers_blocked: false }))
+        .mockResolvedValueOnce(json([syntheticRelationship]))
+        .mockResolvedValueOnce(json({ message: "rejected" }, status))
+
+      await expect(submitCurrentUserDeposit("10")).resolves.toEqual({
+        state: "failed",
+        message:
+          "Alpaca rejected this deposit. Check the amount and try again.",
+      })
+    },
+  )
+
+  it.each([
+    ["request failure", () => Promise.reject(new TypeError("timeout"))],
+    ["server failure", () => Promise.resolve(json({}, 500))],
+    ["unexpected status", () => Promise.resolve(json({}, 429))],
+    ["unreadable success", () => Promise.resolve(json({}))],
+  ])(
+    "returns an unknown outcome after %s without replay",
+    async (_case, post) => {
+      mocks.request
+        .mockResolvedValueOnce(json({ transfers_blocked: false }))
+        .mockResolvedValueOnce(json([syntheticRelationship]))
+        .mockImplementationOnce(post)
+
+      await expect(submitCurrentUserDeposit("10")).resolves.toEqual({
+        state: "unknown",
+        message:
+          "Deposit outcome is unknown. Check recent Transfers before trying again.",
+      })
+      expect(mocks.request).toHaveBeenCalledTimes(3)
+      expect(mocks.request).toHaveBeenLastCalledWith(
+        "/v1/accounts/account-123/transfers",
+        expect.objectContaining({ authenticationReplay: "never" }),
+      )
+    },
+  )
 })
 
 describe("Funding snapshot", () => {

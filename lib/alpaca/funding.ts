@@ -73,10 +73,16 @@ const RELATIONSHIP_STATUSES = new Set([
 ])
 const DECIMAL = /^-?\d+(?:\.\d+)?$/
 const POSITIVE_DECIMAL = /^\d+(?:\.\d+)?$/
+const POSITIVE_WHOLE_DOLLARS = /^[1-9]\d*$/
 const FUNDING_REQUEST_TIMEOUT_MS = 10_000
 const SYNTHETIC_ACCOUNT_SUFFIX = "4242" as const
 const SYNTHETIC_ACCOUNT_NUMBER = `000000${SYNTHETIC_ACCOUNT_SUFFIX}` as const
 const SOURCE_NAME = `Chase Checking •••• ${SYNTHETIC_ACCOUNT_SUFFIX}` as const
+const UNKNOWN_DEPOSIT_RESULT = {
+  state: "unknown",
+  message:
+    "Deposit outcome is unknown. Check recent Transfers before trying again.",
+} as const
 const SYNTHETIC_ACH_DETAILS = {
   account_owner_name: "Wealth Manager Sandbox",
   bank_account_type: "CHECKING",
@@ -389,6 +395,121 @@ export async function prepareCurrentUserFundingSource() {
   }
 
   return prepareSyntheticFundingSource(account.alpacaAccountId)
+}
+
+export async function submitCurrentUserDeposit(amount: unknown) {
+  const userId = await getCurrentUserId()
+  const [account] = await db
+    .select({
+      alpacaAccountId: alpacaAccounts.alpacaAccountId,
+      provisioningStatus: alpacaAccounts.provisioningStatus,
+    })
+    .from(alpacaAccounts)
+    .where(eq(alpacaAccounts.userId, userId))
+    .limit(1)
+
+  if (typeof amount !== "string" || !POSITIVE_WHOLE_DOLLARS.test(amount)) {
+    return {
+      state: "failed" as const,
+      message: "Enter a positive whole-dollar amount.",
+    }
+  }
+  if (account?.provisioningStatus !== "linked" || !account.alpacaAccountId) {
+    return {
+      state: "failed" as const,
+      message: "A linked Brokerage Account is required.",
+    }
+  }
+
+  const accountId = encodeURIComponent(account.alpacaAccountId)
+  let preflight: [TradingAccount, AlpacaAchRelationship[]]
+  try {
+    preflight = await Promise.all([
+      readAlpaca(
+        alpacaBrokerRequest(`/v1/trading/accounts/${accountId}/account`, {
+          cache: "no-store",
+          signal: AbortSignal.timeout(FUNDING_REQUEST_TIMEOUT_MS),
+          authenticationReplay: "safe-once",
+        }),
+        parseTradingAccount,
+      ),
+      listRelationships(account.alpacaAccountId),
+    ])
+  } catch {
+    return {
+      state: "failed" as const,
+      message: "Deposit could not be submitted. Try again.",
+    }
+  }
+
+  const [tradingAccount, relationships] = preflight
+  if (tradingAccount.transfers_blocked !== false) {
+    return {
+      state: "failed" as const,
+      message: "Transfers are blocked for this Brokerage Account.",
+    }
+  }
+  const relationship = findSyntheticRelationship(relationships)
+  if (relationship?.status !== "APPROVED") {
+    return {
+      state: "failed" as const,
+      message: "An approved Funding Source is required.",
+    }
+  }
+
+  let response: Response
+  try {
+    response = await alpacaBrokerRequest(
+      `/v1/accounts/${accountId}/transfers`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          transfer_type: "ach",
+          relationship_id: relationship.id,
+          amount,
+          direction: "INCOMING",
+        }),
+        cache: "no-store",
+        signal: AbortSignal.timeout(FUNDING_REQUEST_TIMEOUT_MS),
+        authenticationReplay: "never",
+      },
+    )
+  } catch {
+    return UNKNOWN_DEPOSIT_RESULT
+  }
+
+  if (!response.ok) {
+    if (response.status === 403) {
+      return {
+        state: "failed" as const,
+        message: "Deposits are not permitted for this Brokerage Account.",
+      }
+    }
+    if (response.status === 400 || response.status === 422) {
+      return {
+        state: "failed" as const,
+        message:
+          "Alpaca rejected this deposit. Check the amount and try again.",
+      }
+    }
+    return UNKNOWN_DEPOSIT_RESULT
+  }
+
+  try {
+    const transfer = await response.json()
+    if (
+      typeof transfer !== "object" ||
+      transfer === null ||
+      typeof (transfer as Record<string, unknown>).id !== "string"
+    ) {
+      throw new Error()
+    }
+  } catch {
+    return UNKNOWN_DEPOSIT_RESULT
+  }
+
+  return { state: "accepted" as const, message: "Deposit submitted." }
 }
 
 function mapFundingSource(relationships: readonly AlpacaAchRelationship[]) {

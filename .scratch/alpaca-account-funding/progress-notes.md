@@ -21,3 +21,10 @@ The following notes may be helpful to the agent working on the next ticket, `03 
 - `getFundingSnapshot()` already exposes `transfersBlocked` and approved-source readiness, but the deposit Server Action must fetch and recheck both from Alpaca immediately before POSTing; render-time snapshot values are not authorization or mutation guards.
 - No real Alpaca mutation was performed while implementing issue 02; all ACH Relationship responses were mocked. The manual sandbox deposit remains entirely for issue 03.
 - Repository workflow requires Funding mockup metadata to stay synchronized with tracker lifecycle. `.mockups/funding-page/README.md` and `.mockups/README.md` are currently `in-progress` and already link the Alpaca funding spec.
+
+## Notes from implementing `03 — Enable whole-dollar deposits`
+
+- `submitCurrentUserDeposit()` is the no-replay Transfer mutation pattern for issue 04: authenticate, derive the linked Brokerage Account, validate decimal-string money, fetch current Trading Account and approved synthetic relationship, then POST with `authenticationReplay: "never"`.
+- Only documented `400`, `403`, and `422` Transfer rejections are treated as definitive. Thrown requests, undocumented statuses, server failures, and unreadable successes remain unknown and trigger one Server Action refresh.
+- `DepositDialog` establishes the review/confirm/pending/result interaction. It does not optimistically alter the snapshot and leaves unknown outcomes non-retryable until the User closes the completed state.
+- The manual sandbox pass submitted $10. Alpaca exposed it after refresh as `SENT_TO_CLEARING`, with +$10.00 net pending cash; current cash remained unchanged while the Transfer was pending.

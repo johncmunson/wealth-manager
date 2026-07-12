@@ -5,4 +5,4 @@
 - **Mockup status:** directional
 - **Scope:** Buying power, cash availability, and Transfers.
 
-The `/app/funding` overview and Funding Source preparation are implemented; deposits and withdrawals remain in progress. Linked-bank imagery is illustrative and does not prescribe Plaid.
+The `/app/funding` overview, Funding Source preparation, and deposits are implemented; withdrawals remain in progress. Linked-bank imagery is illustrative and does not prescribe Plaid.

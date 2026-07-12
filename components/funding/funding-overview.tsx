@@ -1,6 +1,6 @@
 "use client"
 
-import { useActionState, useTransition } from "react"
+import { useActionState, useState, useTransition } from "react"
 import { ArrowDownLeft, ArrowUpRight, Landmark, RefreshCw } from "lucide-react"
 import { useRouter } from "next/navigation"
 
@@ -21,8 +21,29 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field"
+import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
-import { prepareFunding } from "@/app/app/funding/actions"
+import {
+  depositFunding,
+  prepareFunding,
+  type DepositFundingActionState,
+} from "@/app/app/funding/actions"
 import type { FundingSnapshot, FundingTransfer } from "@/lib/alpaca/funding"
 
 const money = new Intl.NumberFormat("en-US", {
@@ -154,6 +175,158 @@ function TransferRow({ transfer }: { transfer: FundingTransfer }) {
   )
 }
 
+const positiveWholeDollars = /^[1-9]\d*$/
+
+function DepositDialog({ disabled }: { disabled: boolean }) {
+  const [open, setOpen] = useState(false)
+  const [amount, setAmount] = useState("")
+  const [reviewing, setReviewing] = useState(false)
+  const [error, setError] = useState<string>()
+  const [result, setResult] = useState<DepositFundingActionState>()
+  const [pending, startTransition] = useTransition()
+
+  function setDialogOpen(nextOpen: boolean) {
+    setOpen(nextOpen)
+    if (!nextOpen) {
+      setAmount("")
+      setReviewing(false)
+      setError(undefined)
+      setResult(undefined)
+    }
+  }
+
+  function review(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!positiveWholeDollars.test(amount)) {
+      setError("Enter a positive whole-dollar amount.")
+      return
+    }
+    setError(undefined)
+    setReviewing(true)
+  }
+
+  function confirm() {
+    const formData = new FormData()
+    formData.set("amount", amount)
+    startTransition(async () => {
+      const nextResult = await depositFunding(undefined, formData)
+      setResult(
+        nextResult ?? {
+          status: "unknown",
+          message:
+            "Deposit outcome is unknown. Check recent Transfers before trying again.",
+        },
+      )
+    })
+  }
+
+  const finished = result?.status === "success" || result?.status === "unknown"
+
+  return (
+    <Dialog open={open} onOpenChange={setDialogOpen}>
+      <DialogTrigger render={<Button type="button" disabled={disabled} />}>
+        Add funds
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>
+            {result?.status === "success"
+              ? "Deposit submitted"
+              : result?.status === "unknown"
+                ? "Deposit status unknown"
+                : reviewing
+                  ? "Review deposit"
+                  : "Add funds"}
+          </DialogTitle>
+          <DialogDescription>
+            {result?.status === "success"
+              ? result.message
+              : result?.status === "unknown"
+                ? "The request may have reached Alpaca."
+                : reviewing
+                  ? "Confirm this one-time simulated ACH deposit."
+                  : "Enter a positive whole-dollar amount."}
+          </DialogDescription>
+        </DialogHeader>
+
+        {finished ? null : reviewing ? (
+          <dl className="flex flex-col gap-3">
+            <div>
+              <dt className="text-muted-foreground">Amount</dt>
+              <dd className="text-xl font-semibold tabular-nums">
+                ${amount.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}.00
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Funding Source</dt>
+              <dd>Chase Checking •••• 4242</dd>
+            </div>
+          </dl>
+        ) : (
+          <form id="deposit-entry" onSubmit={review}>
+            <FieldGroup>
+              <Field data-invalid={Boolean(error)}>
+                <FieldLabel htmlFor="deposit-amount">Amount</FieldLabel>
+                <Input
+                  id="deposit-amount"
+                  name="amount"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  autoFocus
+                  value={amount}
+                  aria-invalid={Boolean(error)}
+                  aria-describedby="deposit-help"
+                  onChange={(event) => setAmount(event.target.value)}
+                />
+                <FieldDescription id="deposit-help">
+                  Whole USD only. Funding Source: Chase Checking •••• 4242
+                </FieldDescription>
+                <FieldError>{error}</FieldError>
+              </Field>
+            </FieldGroup>
+          </form>
+        )}
+
+        {result && result.status !== "success" ? (
+          <p role="alert" className="text-destructive">
+            {result.message}
+          </p>
+        ) : null}
+
+        <DialogFooter>
+          {finished ? (
+            <Button type="button" onClick={() => setDialogOpen(false)}>
+              Close
+            </Button>
+          ) : reviewing ? (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={pending}
+                onClick={() => {
+                  setReviewing(false)
+                  setResult(undefined)
+                }}
+              >
+                Back
+              </Button>
+              <Button type="button" disabled={pending} onClick={confirm}>
+                {pending ? "Submitting deposit…" : "Confirm deposit"}
+              </Button>
+            </>
+          ) : (
+            <Button type="submit" form="deposit-entry">
+              Review deposit
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 export function FundingOverview({ snapshot }: { snapshot: FundingSnapshot }) {
   const [prepareState, prepareAction, preparing] = useActionState(
     prepareFunding,
@@ -275,9 +448,7 @@ export function FundingOverview({ snapshot }: { snapshot: FundingSnapshot }) {
           ) : null}
           {snapshot.fundingSource.state === "ready" ? (
             <div className="flex gap-2">
-              <Button type="button" disabled>
-                Deposit
-              </Button>
+              <DepositDialog disabled={snapshot.transfersBlocked !== false} />
               <Button type="button" variant="outline" disabled>
                 Withdraw
               </Button>

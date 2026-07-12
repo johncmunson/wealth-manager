@@ -2,7 +2,36 @@
 
 import { refresh } from "next/cache"
 
-import { prepareCurrentUserFundingSource } from "@/lib/alpaca/funding"
+import {
+  prepareCurrentUserFundingSource,
+  submitCurrentUserDeposit,
+} from "@/lib/alpaca/funding"
+
+export type DepositFundingActionState =
+  | { readonly status: "success"; readonly message: string }
+  | { readonly status: "error"; readonly message: string }
+  | { readonly status: "unknown"; readonly message: string }
+  | undefined
+
+export async function depositFunding(
+  _previousState: DepositFundingActionState,
+  formData: FormData,
+): Promise<DepositFundingActionState> {
+  void _previousState
+  const result = await submitCurrentUserDeposit(formData.get("amount"))
+
+  if (result.state === "accepted" || result.state === "unknown") refresh()
+
+  return {
+    status:
+      result.state === "accepted"
+        ? "success"
+        : result.state === "unknown"
+          ? "unknown"
+          : "error",
+    message: result.message,
+  }
+}
 
 export type PrepareFundingActionState =
   | { readonly status: "success"; readonly message: string }
