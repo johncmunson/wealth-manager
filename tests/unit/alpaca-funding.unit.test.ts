@@ -171,6 +171,31 @@ describe("Funding Source preparation", () => {
     expect(mocks.request).toHaveBeenCalledTimes(3)
   })
 
+  it("bounds relationship creation so preparation cannot remain pending indefinitely", async () => {
+    const controller = new AbortController()
+    const timeout = vi
+      .spyOn(AbortSignal, "timeout")
+      .mockReturnValue(controller.signal)
+    mocks.request
+      .mockResolvedValueOnce(json([]))
+      .mockImplementationOnce(
+        (_path, options) =>
+          new Promise((_, reject) =>
+            options.signal?.addEventListener("abort", () =>
+              reject(options.signal?.reason),
+            ),
+          ),
+      )
+
+    const preparation = prepareSyntheticFundingSource("account-123")
+    await vi.waitFor(() => expect(mocks.request).toHaveBeenCalledTimes(2))
+    controller.abort(new DOMException("Timed out", "TimeoutError"))
+
+    await expect(preparation).resolves.toMatchObject({ state: "unknown" })
+    expect(timeout).toHaveBeenCalledTimes(2)
+    expect(timeout).toHaveBeenCalledWith(10_000)
+  })
+
   it("treats an unreadable successful creation response as ambiguous", async () => {
     mocks.request
       .mockResolvedValueOnce(json([]))
@@ -366,6 +391,34 @@ describe("Funding snapshot", () => {
       "transfer-4",
       "transfer-3",
     ])
+  })
+
+  it("bounds every Alpaca read so Refresh cannot remain pending indefinitely", async () => {
+    const controller = new AbortController()
+    const timeout = vi
+      .spyOn(AbortSignal, "timeout")
+      .mockReturnValue(controller.signal)
+    mocks.request.mockImplementation(
+      (_path, options) =>
+        new Promise((_, reject) =>
+          options.signal?.addEventListener("abort", () =>
+            reject(options.signal?.reason),
+          ),
+        ),
+    )
+
+    const snapshot = getFundingSnapshot()
+    await vi.waitFor(() => expect(mocks.request).toHaveBeenCalledTimes(3))
+    controller.abort(new DOMException("Timed out", "TimeoutError"))
+
+    await expect(snapshot).resolves.toMatchObject({
+      accountState: "linked",
+      balancesError: "Cash availability could not be loaded from Alpaca.",
+      fundingSource: { state: "unavailable" },
+      transfersError: "Recent Transfers could not be loaded from Alpaca.",
+    })
+    expect(timeout).toHaveBeenCalledTimes(3)
+    expect(timeout).toHaveBeenCalledWith(10_000)
   })
 
   it("keeps optional Trading Account fields unavailable instead of inventing values", async () => {

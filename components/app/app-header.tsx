@@ -17,7 +17,7 @@ export function AppHeader() {
         orientation="vertical"
         className="mr-2 data-vertical:h-4 data-vertical:self-center"
       />
-      <h1 className="text-base font-medium">{title}</h1>
+      <h1 className="text-2xl font-semibold">{title}</h1>
     </header>
   )
 }

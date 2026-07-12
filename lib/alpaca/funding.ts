@@ -73,6 +73,7 @@ const RELATIONSHIP_STATUSES = new Set([
 ])
 const DECIMAL = /^-?\d+(?:\.\d+)?$/
 const POSITIVE_DECIMAL = /^\d+(?:\.\d+)?$/
+const FUNDING_REQUEST_TIMEOUT_MS = 10_000
 const SYNTHETIC_ACCOUNT_SUFFIX = "4242" as const
 const SYNTHETIC_ACCOUNT_NUMBER = `000000${SYNTHETIC_ACCOUNT_SUFFIX}` as const
 const SOURCE_NAME = `Chase Checking •••• ${SYNTHETIC_ACCOUNT_SUFFIX}` as const
@@ -281,6 +282,7 @@ async function listRelationships(alpacaAccountId: string) {
       `/v1/accounts/${encodeURIComponent(alpacaAccountId)}/ach_relationships`,
       {
         cache: "no-store",
+        signal: AbortSignal.timeout(FUNDING_REQUEST_TIMEOUT_MS),
         authenticationReplay: "safe-once",
       },
     ),
@@ -311,6 +313,7 @@ export async function prepareSyntheticFundingSource(alpacaAccountId: string) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(SYNTHETIC_ACH_DETAILS),
         cache: "no-store",
+        signal: AbortSignal.timeout(FUNDING_REQUEST_TIMEOUT_MS),
         authenticationReplay: "never",
       },
     )
@@ -433,6 +436,7 @@ export async function getFundingSnapshot(): Promise<FundingSnapshot> {
     account: readAlpaca(
       alpacaBrokerRequest(`/v1/trading/accounts/${accountId}/account`, {
         cache: "no-store",
+        signal: AbortSignal.timeout(FUNDING_REQUEST_TIMEOUT_MS),
         authenticationReplay: "safe-once",
       }),
       parseTradingAccount,
@@ -440,6 +444,7 @@ export async function getFundingSnapshot(): Promise<FundingSnapshot> {
     relationships: readAlpaca(
       alpacaBrokerRequest(`/v1/accounts/${accountId}/ach_relationships`, {
         cache: "no-store",
+        signal: AbortSignal.timeout(FUNDING_REQUEST_TIMEOUT_MS),
         authenticationReplay: "safe-once",
       }),
       parseRelationships,
@@ -447,6 +452,7 @@ export async function getFundingSnapshot(): Promise<FundingSnapshot> {
     transfers: readAlpaca(
       alpacaBrokerRequest(`/v1/accounts/${accountId}/transfers`, {
         cache: "no-store",
+        signal: AbortSignal.timeout(FUNDING_REQUEST_TIMEOUT_MS),
         authenticationReplay: "safe-once",
       }),
       parseTransfers,

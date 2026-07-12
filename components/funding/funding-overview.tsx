@@ -95,7 +95,7 @@ function UnavailableOverview({
 }) {
   const [title, description] = unavailableCopy[state]
   return (
-    <Card>
+    <Card className="bg-muted/50">
       <CardContent>
         <Empty>
           <EmptyHeader>
@@ -166,17 +166,11 @@ export function FundingOverview({ snapshot }: { snapshot: FundingSnapshot }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Funding</h1>
-          <p className="text-muted-foreground">
-            Review cash availability and simulated sandbox Transfers.
-          </p>
-        </div>
+      <div className="flex justify-end">
         <RefreshButton />
       </div>
 
-      <Card>
+      <Card className="bg-muted/50">
         <CardHeader>
           <CardTitle>
             <h2>Cash availability</h2>
@@ -225,12 +219,14 @@ export function FundingOverview({ snapshot }: { snapshot: FundingSnapshot }) {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="bg-muted/50">
         <CardHeader>
           <CardTitle>
             <h2>Funding Source</h2>
           </CardTitle>
-          <CardDescription>{snapshot.fundingSource.name}</CardDescription>
+          {snapshot.fundingSource.state === "missing" ? null : (
+            <CardDescription>{snapshot.fundingSource.name}</CardDescription>
+          )}
           <CardAction className="flex items-center gap-2">
             {snapshot.fundingSource.state === "missing" ? (
               <form action={prepareAction}>
@@ -267,7 +263,8 @@ export function FundingOverview({ snapshot }: { snapshot: FundingSnapshot }) {
             }
           >
             <p>{snapshot.fundingSource.message}</p>
-            {prepareState?.status === "success" ? (
+            {prepareState?.status === "success" &&
+            snapshot.fundingSource.state === "missing" ? (
               <p>{prepareState.message}</p>
             ) : null}
           </div>
@@ -276,7 +273,7 @@ export function FundingOverview({ snapshot }: { snapshot: FundingSnapshot }) {
               {prepareState.message}
             </p>
           ) : null}
-          {snapshot.fundingSource.state === "preparing" ? (
+          {snapshot.fundingSource.state === "ready" ? (
             <div className="flex gap-2">
               <Button type="button" disabled>
                 Deposit
@@ -289,7 +286,7 @@ export function FundingOverview({ snapshot }: { snapshot: FundingSnapshot }) {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="bg-muted/50">
         <CardHeader>
           <CardTitle>
             <h2>Recent Transfers</h2>

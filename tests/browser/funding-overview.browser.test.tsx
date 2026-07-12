@@ -60,9 +60,6 @@ const snapshot = {
 test("shows Alpaca cash values, the simulated Funding Source, and recent Transfers", async () => {
   const screen = await render(<FundingOverview snapshot={snapshot} />)
 
-  await expect
-    .element(screen.getByRole("heading", { name: "Funding", exact: true }))
-    .toBeVisible()
   await expect.element(screen.getByText("$12,840.00")).toBeVisible()
   await expect.element(screen.getByText("$9,340.00")).toBeVisible()
   await expect.element(screen.getByText("$10,340.00")).toBeVisible()
@@ -74,9 +71,6 @@ test("shows Alpaca cash values, the simulated Funding Source, and recent Transfe
     .element(
       screen.getByText("Sandbox deposits and withdrawals are simulated."),
     )
-    .toBeVisible()
-  await expect
-    .element(screen.getByText("Deposit", { exact: true }))
     .toBeVisible()
   await expect
     .element(screen.getByText("Withdrawal", { exact: true }))
@@ -154,7 +148,7 @@ test("keeps Transfer information labeled on a narrow screen", async () => {
     .element(screen.getByText("Amount", { exact: true }).nth(0))
     .toBeVisible()
   await expect
-    .element(screen.getByText("Deposit", { exact: true }))
+    .element(screen.getByText("Deposit", { exact: true }).nth(1))
     .toBeVisible()
 })
 
@@ -196,6 +190,9 @@ test("offers keyboard-accessible preparation once when the Funding Source is mis
   )
   const button = screen.getByRole("button", { name: "Prepare funding" })
 
+  await expect
+    .element(screen.getByText("Chase Checking •••• 4242"))
+    .not.toBeInTheDocument()
   await userEvent.tab()
   await userEvent.tab()
   await expect.element(button).toHaveFocus()
@@ -268,8 +265,8 @@ test("shows pending preparation and prevents duplicate submission", async () => 
     .toHaveTextContent("Funding Source prepared.")
 })
 
-test("keeps Transfer affordances disabled while the Funding Source is being prepared", async () => {
-  const screen = await render(
+test("shows Transfer affordances only after the Funding Source is ready", async () => {
+  const preparingScreen = await render(
     <FundingOverview
       snapshot={{
         ...snapshot,
@@ -283,14 +280,19 @@ test("keeps Transfer affordances disabled while the Funding Source is being prep
   )
 
   await expect
-    .element(screen.getByRole("button", { name: "Deposit" }))
-    .toBeDisabled()
+    .element(preparingScreen.getByRole("button", { name: "Deposit" }))
+    .not.toBeInTheDocument()
   await expect
-    .element(screen.getByRole("button", { name: "Withdraw" }))
-    .toBeDisabled()
+    .element(preparingScreen.getByRole("button", { name: "Withdraw" }))
+    .not.toBeInTheDocument()
+
+  const readyScreen = await render(<FundingOverview snapshot={snapshot} />)
   await expect
-    .element(screen.getByRole("status"))
-    .toHaveTextContent("Funding source is being prepared.")
+    .element(readyScreen.getByRole("button", { name: "Deposit" }))
+    .toBeVisible()
+  await expect
+    .element(readyScreen.getByRole("button", { name: "Withdraw" }))
+    .toBeVisible()
 })
 
 test("refreshes the server-rendered snapshot from an accessible control", async () => {
