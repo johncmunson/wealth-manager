@@ -40,7 +40,7 @@ Build the product incrementally inside the existing authenticated shell. Keep Po
 - Order and Transfer detail routes are optional; add them only if the primary Activity and Funding experiences cannot present enough detail in place.
 - Shared navigation metadata remains the source for sidebar items and route-aware headings.
 - Product pages should be composed from the existing shadcn/ui foundations without modifying foundational components.
-- The mockups under `_mockups/` are prototype evidence for layout and information hierarchy. They are not authoritative for data contracts, route names, or completed behavior.
+- The mockups under `.mockups/` are prototype evidence for layout and information hierarchy. They are not authoritative for data contracts, route names, or completed behavior.
 - The Portfolio mockup's Automations destination is not part of the accepted primary navigation. Automation remains future Strategy behavior unless separately specified.
 - Funding must not assume Plaid. Any linked-bank presentation in a mockup is illustrative until a non-Plaid funding flow is specified.
 

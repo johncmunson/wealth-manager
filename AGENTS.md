@@ -22,40 +22,15 @@ Triage uses the five default canonical labels. See `docs/agents/triage-labels.md
 
 Domain documentation uses a single-context layout. See `docs/agents/domain.md`.
 
+### Design mockups
+
+Visual product direction lives in `.mockups/`. See `docs/agents/mockups.md`.
+
 </general-planning-workflow>
 
-## Preferred Package Manager
+## Additional Notes
 
-Use `pnpm` and/or `pnpx` as opposed to `npm` or `yarn`.
-
-## Web Access Policy
-
-Use web access only via `curl` in the `bash` tool, and only for exact, direct URLs that are already known. In general, avoid fetching URLs unless you are specifically on a research mission or a URL seems highly relevant to the task at hand and the additional context is necessary to move forward.
-
-Rules:
-
-- Do **not** browse the open web.
-- Do **not** use search engines, search-result pages, web search tools, or pi-web-access tools.
-- Do **not** fetch anything other than URLs that appear to be HTML, markdown, or plaintext.
-- Do **not** discover URLs by querying Google/Bing/DuckDuckGo/etc.
-- Only fetch a URL when it is:
-  - explicitly provided by the user,
-  - present in the repository/config/docs being inspected, or
-  - an exact official URL already known without searching.
-- If a task requires unknown web research, ask the user for the exact URL instead.
-
-When fetching HTTP content, prefer markdown/text:
-
-```bash
-curl -fsS --max-time 10 --max-filesize 40000 \
-  -H 'Accept: text/markdown, text/plain, text/html' \
-  'https://example.com/path' | head -c 40000
-```
-
-> Minor caveat: when head stops early, curl may notice the pipe closed and print a harmless “failure writing output” error.
-
-## Misc. Notes
-
+- Use `pnpm` and/or `pnpx` as opposed to `npm` or `yarn`.
 - A dev server will always be running for you at `http://localhost:3000`
 - When launching `agent-browser` for this app, reuse the authenticated profile with `--profile ~/.agent-browser/profiles/wealth-manager`
 - The better-auth agent skills might mention URLs like this, `https://better-auth.com/docs/concepts/hooks`. However, `https://better-auth.com/docs` is not an LLM-friendly base URL. Use `https://better-auth.com/llms.txt/docs` as the base URL instead, e.g. `https://better-auth.com/llms.txt/docs/concepts/hooks`.
