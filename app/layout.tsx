@@ -17,28 +17,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Wealth Manager",
   description: "Your copilot for long-term investing and portfolio management.",
-  // This is how we do favicons if and when we decide to implement dark mode.
-  // If going with this method, can delete `app/favicon.ico`
-  // icons: {
-  //   icon: [
-  //     {
-  //       url: "/icon-light-32x32.png",
-  //       media: "(prefers-color-scheme: light)",
-  //     },
-  //     {
-  //       url: "/icon-dark-32x32.png",
-  //       media: "(prefers-color-scheme: dark)",
-  //     },
-  //     {
-  //       url: "/icon.svg",
-  //       type: "image/svg+xml",
-  //     },
-  //   ],
-  //   apple: "/apple-icon.png",
-  // },
 }
 
-// Another dark mode thing if we decide to support it
+// This is for dark mode if we decide to support it
 // export const viewport: Viewport = {
 //   colorScheme: 'light dark',
 //   themeColor: [
