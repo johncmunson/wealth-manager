@@ -1,6 +1,6 @@
 # Alpaca account funding
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 ## Problem Statement
 
