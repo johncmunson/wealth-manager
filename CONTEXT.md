@@ -43,16 +43,44 @@ Changing a Portfolio's Holdings to reduce Strategy Drift.
 _Avoid_: Realignment
 
 **Asset**:
-A security that can be held or traded. Wealth Manager's supported assets are stocks, bonds, and ETFs.
+A security that can be held or traded. Wealth Manager currently supports stocks and ETFs; bonds are unsupported.
 _Avoid_: Investment, instrument
 
 **Holding**:
 The quantity and value of an Asset currently owned in a Portfolio.
 _Avoid_: Position
 
+**Available-to-Sell Quantity**:
+The portion of a Holding that may currently be sold after accounting for shares committed to open Orders.
+_Avoid_: Holding quantity, owned shares
+
+**Symbol**:
+The ticker code used to identify an Asset, such as AAPL or VTI.
+_Avoid_: Ticker
+
+**Tradable Asset**:
+An active stock or ETF that Alpaca currently permits the Brokerage Account to trade.
+_Avoid_: Supported security, available investment
+
 **Order**:
-An instruction to buy or sell an Asset through a Brokerage Account.
+An instruction to buy or sell an Asset through a Brokerage Account, specified in either dollars or shares. Wealth Manager currently supports only Market Orders, and Sell Orders may only reduce an existing Holding.
 _Avoid_: Trade, transaction
+
+**Market Order**:
+An Order to buy or sell promptly at the available market price; its execution price is not guaranteed.
+_Avoid_: Instant Order
+
+**Day Order**:
+An Order eligible for execution during the next applicable regular market session and expired if it remains unfilled when that session ends. Wealth Manager does not currently support extended-hours trading.
+_Avoid_: Good-for-day Order
+
+**Placed Order**:
+An Order accepted by Alpaca but not necessarily executed.
+_Avoid_: Completed Order, successful trade
+
+**Filled Order**:
+An Order whose requested purchase or sale has been fully executed.
+_Avoid_: Placed Order, completed trade
 
 **Activity**:
 The unified history of Orders and other events affecting a Brokerage Account.
