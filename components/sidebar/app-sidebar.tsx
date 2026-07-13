@@ -20,7 +20,11 @@ import {
 import { Label } from "@/components/ui/label"
 import { OrderDialog } from "@/components/order/order-dialog"
 import { appNavItems, isAppRouteActive } from "@/lib/app-navigation"
-import type { OrderSnapshot } from "@/lib/alpaca/orders"
+import type {
+  BuyAssetValidation,
+  OrderQuote,
+  OrderSnapshot,
+} from "@/lib/alpaca/orders"
 import {
   Sidebar,
   SidebarContent,
@@ -38,8 +42,12 @@ import {
 
 export function AppSidebar({
   readOrderSnapshotAction,
+  validateBuyAssetAction,
+  refreshBuyQuoteAction,
 }: {
   readOrderSnapshotAction: () => Promise<OrderSnapshot>
+  validateBuyAssetAction: (symbol: string) => Promise<BuyAssetValidation>
+  refreshBuyQuoteAction: (symbol: string) => Promise<OrderQuote | null>
 }) {
   const pathname = usePathname()
   const router = useRouter()
@@ -75,7 +83,11 @@ export function AppSidebar({
               className="h-12 pl-10 text-base"
             />
           </div>
-          <OrderDialog readOrderSnapshotAction={readOrderSnapshotAction} />
+          <OrderDialog
+            readOrderSnapshotAction={readOrderSnapshotAction}
+            validateBuyAssetAction={validateBuyAssetAction}
+            refreshBuyQuoteAction={refreshBuyQuoteAction}
+          />
         </div>
       </SidebarHeader>
 
