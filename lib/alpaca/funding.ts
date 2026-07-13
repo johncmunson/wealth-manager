@@ -118,6 +118,27 @@ function optionalDecimal(value: unknown) {
   return value
 }
 
+async function readAlpacaError(response: Response) {
+  try {
+    const value: unknown = await response.json()
+    if (typeof value !== "object" || value === null) return {}
+
+    const error = value as Record<string, unknown>
+    return {
+      code:
+        typeof error.code === "string" || typeof error.code === "number"
+          ? error.code
+          : undefined,
+      message:
+        typeof error.message === "string"
+          ? error.message.slice(0, 500)
+          : undefined,
+    }
+  } catch {
+    return {}
+  }
+}
+
 function parseTradingAccount(value: unknown): TradingAccount {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new Error()
@@ -487,10 +508,17 @@ export async function submitCurrentUserDeposit(amount: unknown) {
       }
     }
     if (response.status === 400 || response.status === 422) {
+      const error = await readAlpacaError(response)
+      console.error("Alpaca rejected deposit.", {
+        status: response.status,
+        requestId: response.headers.get("x-request-id") ?? undefined,
+        ...error,
+      })
       return {
         state: "failed" as const,
-        message:
-          "Alpaca rejected this deposit. Check the amount and try again.",
+        message: error.message
+          ? `Alpaca rejected this deposit: ${error.message}`
+          : "Alpaca rejected this deposit. Check recent Transfers.",
       }
     }
     return UNKNOWN_DEPOSIT_RESULT

@@ -49,6 +49,7 @@ function queueSnapshotResponses(
 }
 
 beforeEach(() => {
+  vi.restoreAllMocks()
   mocks.request.mockReset()
   mocks.userId.mockReset().mockResolvedValue(42)
   mocks.account = {
@@ -377,20 +378,54 @@ describe("Deposits", () => {
   })
 
   it.each([400, 422])(
-    "returns definitive feedback for Alpaca status %s",
+    "logs and surfaces Alpaca's reason for definitive status %s",
     async (status) => {
+      const log = vi.spyOn(console, "error").mockImplementation(() => undefined)
       mocks.request
         .mockResolvedValueOnce(json({ transfers_blocked: false }))
         .mockResolvedValueOnce(json([syntheticRelationship]))
-        .mockResolvedValueOnce(json({ message: "rejected" }, status))
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              code: 40010002,
+              message: "another ACH transfer is still pending",
+            }),
+            {
+              status,
+              headers: {
+                "content-type": "application/json",
+                "x-request-id": "request-123",
+              },
+            },
+          ),
+        )
 
       await expect(submitCurrentUserDeposit("10")).resolves.toEqual({
         state: "failed",
         message:
-          "Alpaca rejected this deposit. Check the amount and try again.",
+          "Alpaca rejected this deposit: another ACH transfer is still pending",
+      })
+      expect(log).toHaveBeenCalledWith("Alpaca rejected deposit.", {
+        status,
+        requestId: "request-123",
+        code: 40010002,
+        message: "another ACH transfer is still pending",
       })
     },
   )
+
+  it("does not blame the amount when Alpaca omits its rejection reason", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined)
+    mocks.request
+      .mockResolvedValueOnce(json({ transfers_blocked: false }))
+      .mockResolvedValueOnce(json([syntheticRelationship]))
+      .mockResolvedValueOnce(json({}, 422))
+
+    await expect(submitCurrentUserDeposit("10")).resolves.toEqual({
+      state: "failed",
+      message: "Alpaca rejected this deposit. Check recent Transfers.",
+    })
+  })
 
   it.each([
     ["request failure", () => Promise.reject(new TypeError("timeout"))],
