@@ -74,6 +74,8 @@ const RELATIONSHIP_STATUSES = new Set([
 const DECIMAL = /^-?\d+(?:\.\d+)?$/
 const POSITIVE_DECIMAL = /^\d+(?:\.\d+)?$/
 const POSITIVE_WHOLE_DOLLARS = /^[1-9]\d*$/
+const POSITIVE_USD = /^(?:[1-9]\d*(?:\.\d{1,2})?|0\.(?:0[1-9]|[1-9]\d?))$/
+const MAX_TRANSFER_AMOUNT_LENGTH = 32
 const FUNDING_REQUEST_TIMEOUT_MS = 10_000
 const SYNTHETIC_ACCOUNT_SUFFIX = "4242" as const
 const SYNTHETIC_ACCOUNT_NUMBER = `000000${SYNTHETIC_ACCOUNT_SUFFIX}` as const
@@ -82,6 +84,11 @@ const UNKNOWN_DEPOSIT_RESULT = {
   state: "unknown",
   message:
     "Deposit outcome is unknown. Check recent Transfers before trying again.",
+} as const
+const UNKNOWN_WITHDRAWAL_RESULT = {
+  state: "unknown",
+  message:
+    "Withdrawal outcome is unknown. Check recent Transfers before trying again.",
 } as const
 const SYNTHETIC_ACH_DETAILS = {
   account_owner_name: "Wealth Manager Sandbox",
@@ -538,6 +545,153 @@ export async function submitCurrentUserDeposit(amount: unknown) {
   }
 
   return { state: "accepted" as const, message: "Deposit submitted." }
+}
+
+export async function submitCurrentUserWithdrawal(amount: unknown) {
+  const userId = await getCurrentUserId()
+  const [account] = await db
+    .select({
+      alpacaAccountId: alpacaAccounts.alpacaAccountId,
+      provisioningStatus: alpacaAccounts.provisioningStatus,
+    })
+    .from(alpacaAccounts)
+    .where(eq(alpacaAccounts.userId, userId))
+    .limit(1)
+
+  if (
+    typeof amount !== "string" ||
+    amount.length > MAX_TRANSFER_AMOUNT_LENGTH ||
+    !POSITIVE_USD.test(amount)
+  ) {
+    return {
+      state: "failed" as const,
+      message: "Enter a positive amount with no more than two decimal places.",
+    }
+  }
+  if (account?.provisioningStatus !== "linked" || !account.alpacaAccountId) {
+    return {
+      state: "failed" as const,
+      message: "A linked Brokerage Account is required.",
+    }
+  }
+
+  const accountId = encodeURIComponent(account.alpacaAccountId)
+  let preflight: [TradingAccount, AlpacaAchRelationship[]]
+  try {
+    preflight = await Promise.all([
+      readAlpaca(
+        alpacaBrokerRequest(`/v1/trading/accounts/${accountId}/account`, {
+          cache: "no-store",
+          signal: AbortSignal.timeout(FUNDING_REQUEST_TIMEOUT_MS),
+          authenticationReplay: "safe-once",
+        }),
+        parseTradingAccount,
+      ),
+      listRelationships(account.alpacaAccountId),
+    ])
+  } catch {
+    return {
+      state: "failed" as const,
+      message: "Withdrawal could not be submitted. Try again.",
+    }
+  }
+
+  const [tradingAccount, relationships] = preflight
+  if (tradingAccount.transfers_blocked !== false) {
+    return {
+      state: "failed" as const,
+      message: "Transfers are blocked for this Brokerage Account.",
+    }
+  }
+  const relationship = findSyntheticRelationship(relationships)
+  if (relationship?.status !== "APPROVED") {
+    return {
+      state: "failed" as const,
+      message: "An approved Funding Source is required.",
+    }
+  }
+  if (tradingAccount.cash_withdrawable === undefined) {
+    return {
+      state: "failed" as const,
+      message: "Current Withdrawable Cash is unavailable.",
+    }
+  }
+  if (compareDecimals(amount, tradingAccount.cash_withdrawable) > 0) {
+    return {
+      state: "failed" as const,
+      message: "Amount exceeds current Withdrawable Cash.",
+    }
+  }
+
+  let response: Response
+  try {
+    response = await alpacaBrokerRequest(
+      `/v1/accounts/${accountId}/transfers`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          transfer_type: "ach",
+          relationship_id: relationship.id,
+          amount,
+          direction: "OUTGOING",
+        }),
+        cache: "no-store",
+        signal: AbortSignal.timeout(FUNDING_REQUEST_TIMEOUT_MS),
+        authenticationReplay: "never",
+      },
+    )
+  } catch {
+    return UNKNOWN_WITHDRAWAL_RESULT
+  }
+
+  if (!response.ok) {
+    if (response.status === 403) {
+      return {
+        state: "failed" as const,
+        message: "Withdrawals are not permitted for this Brokerage Account.",
+      }
+    }
+    if (response.status === 400 || response.status === 422) {
+      const error = await readAlpacaError(response)
+      console.error("Alpaca rejected withdrawal.", {
+        status: response.status,
+        requestId: response.headers.get("x-request-id") ?? undefined,
+        ...error,
+      })
+      return {
+        state: "failed" as const,
+        message: error.message
+          ? `Alpaca rejected this withdrawal: ${error.message}`
+          : "Alpaca rejected this withdrawal. Check recent Transfers.",
+      }
+    }
+    return UNKNOWN_WITHDRAWAL_RESULT
+  }
+
+  try {
+    const transfer = await response.json()
+    if (
+      typeof transfer !== "object" ||
+      transfer === null ||
+      typeof (transfer as Record<string, unknown>).id !== "string"
+    ) {
+      throw new Error()
+    }
+  } catch {
+    return UNKNOWN_WITHDRAWAL_RESULT
+  }
+
+  return { state: "accepted" as const, message: "Withdrawal submitted." }
+}
+
+function compareDecimals(left: string, right: string) {
+  const [leftWhole, leftFraction = ""] = left.split(".")
+  const [rightWhole, rightFraction = ""] = right.split(".")
+  const scale = Math.max(leftFraction.length, rightFraction.length)
+  const leftUnits = BigInt(leftWhole + leftFraction.padEnd(scale, "0"))
+  const rightUnits = BigInt(rightWhole + rightFraction.padEnd(scale, "0"))
+  return leftUnits < rightUnits ? -1 : leftUnits > rightUnits ? 1 : 0
 }
 
 function mapFundingSource(relationships: readonly AlpacaAchRelationship[]) {

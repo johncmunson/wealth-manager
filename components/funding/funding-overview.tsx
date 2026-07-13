@@ -52,7 +52,8 @@ import { Separator } from "@/components/ui/separator"
 import {
   depositFunding,
   prepareFunding,
-  type DepositFundingActionState,
+  withdrawFunding,
+  type TransferFundingActionState,
 } from "@/app/app/funding/actions"
 import type { FundingSnapshot, FundingTransfer } from "@/lib/alpaca/funding"
 
@@ -186,14 +187,40 @@ function TransferRow({ transfer }: { transfer: FundingTransfer }) {
 }
 
 const positiveWholeDollars = /^[1-9]\d*$/
+const positiveUsd = /^(?:[1-9]\d*(?:\.\d{1,2})?|0\.(?:0[1-9]|[1-9]\d?))$/
+const maxTransferAmountLength = 32
 
-function DepositDialog({ disabled }: { disabled: boolean }) {
+function formatUsd(value: string) {
+  const [whole, fraction = ""] = value.split(".")
+  return `$${BigInt(whole).toLocaleString("en-US")}.${fraction.padEnd(2, "0")}`
+}
+
+function compareDecimals(left: string, right: string) {
+  const [leftWhole, leftFraction = ""] = left.split(".")
+  const [rightWhole, rightFraction = ""] = right.split(".")
+  const scale = Math.max(leftFraction.length, rightFraction.length)
+  const leftUnits = BigInt(leftWhole + leftFraction.padEnd(scale, "0"))
+  const rightUnits = BigInt(rightWhole + rightFraction.padEnd(scale, "0"))
+  return leftUnits < rightUnits ? -1 : leftUnits > rightUnits ? 1 : 0
+}
+
+function TransferDialog({
+  kind,
+  disabled,
+  withdrawableCash,
+}: {
+  kind: "deposit" | "withdrawal"
+  disabled: boolean
+  withdrawableCash?: string | null
+}) {
+  const withdrawal = kind === "withdrawal"
   const [open, setOpen] = useState(false)
   const [amount, setAmount] = useState("")
   const [reviewing, setReviewing] = useState(false)
   const [error, setError] = useState<string>()
-  const [result, setResult] = useState<DepositFundingActionState>()
+  const [result, setResult] = useState<TransferFundingActionState>()
   const [pending, startTransition] = useTransition()
+  const router = useRouter()
 
   function setDialogOpen(nextOpen: boolean) {
     setOpen(nextOpen)
@@ -207,8 +234,24 @@ function DepositDialog({ disabled }: { disabled: boolean }) {
 
   function review(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!positiveWholeDollars.test(amount)) {
-      setError("Enter a positive whole-dollar amount.")
+    if (
+      (withdrawal && amount.length > maxTransferAmountLength) ||
+      !(withdrawal ? positiveUsd : positiveWholeDollars).test(amount)
+    ) {
+      setError(
+        withdrawal
+          ? "Enter a positive amount with no more than two decimal places."
+          : "Enter a positive whole-dollar amount.",
+      )
+      return
+    }
+    if (
+      withdrawal &&
+      withdrawableCash !== undefined &&
+      withdrawableCash !== null &&
+      compareDecimals(amount, withdrawableCash) > 0
+    ) {
+      setError("Amount exceeds current Withdrawable Cash.")
       return
     }
     setError(undefined)
@@ -219,43 +262,67 @@ function DepositDialog({ disabled }: { disabled: boolean }) {
     const formData = new FormData()
     formData.set("amount", amount)
     startTransition(async () => {
-      const nextResult = await depositFunding(undefined, formData)
-      setResult(
-        nextResult ?? {
-          status: "unknown",
-          message:
-            "Deposit outcome is unknown. Check recent Transfers before trying again.",
-        },
-      )
+      const unknownResult = {
+        status: "unknown" as const,
+        message: `${withdrawal ? "Withdrawal" : "Deposit"} outcome is unknown. Check recent Transfers before trying again.`,
+      }
+      try {
+        const nextResult = await (
+          withdrawal ? withdrawFunding : depositFunding
+        )(undefined, formData)
+        setResult(nextResult ?? unknownResult)
+        if (!nextResult) router.refresh()
+      } catch {
+        setResult(unknownResult)
+        router.refresh()
+      }
     })
   }
 
+  const noun = withdrawal ? "withdrawal" : "deposit"
   const finished = result?.status === "success" || result?.status === "unknown"
+  const formId = `${noun}-entry`
 
   return (
     <Dialog open={open} onOpenChange={setDialogOpen}>
-      <DialogTrigger render={<Button type="button" disabled={disabled} />}>
-        Add funds
+      <DialogTrigger
+        render={
+          <Button
+            type="button"
+            variant={withdrawal ? "outline" : "default"}
+            disabled={disabled}
+          />
+        }
+      >
+        {withdrawal ? "Withdraw" : "Add funds"}
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>
             {result?.status === "success"
-              ? "Deposit submitted"
+              ? withdrawal
+                ? "Withdrawal submitted"
+                : "Deposit submitted"
               : result?.status === "unknown"
-                ? "Deposit status unknown"
+                ? `${withdrawal ? "Withdrawal" : "Deposit"} status unknown`
                 : reviewing
-                  ? "Review deposit"
-                  : "Add funds"}
+                  ? `Review ${noun}`
+                  : withdrawal
+                    ? "Withdraw funds"
+                    : "Add funds"}
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription
+            role={result?.status === "success" ? "status" : undefined}
+          >
             {result?.status === "success"
               ? result.message
               : result?.status === "unknown"
                 ? "The request may have reached Alpaca."
                 : reviewing
-                  ? "Confirm this one-time simulated ACH deposit."
-                  : "Enter a positive whole-dollar amount."}
+                  ? `Confirm this one-time simulated ACH ${noun}.`
+                  : withdrawal
+                    ? "Enter a positive amount with no more than two decimal places."
+                    : "Enter a positive whole-dollar amount."}
           </DialogDescription>
         </DialogHeader>
 
@@ -264,7 +331,7 @@ function DepositDialog({ disabled }: { disabled: boolean }) {
             <div>
               <dt className="text-muted-foreground">Amount</dt>
               <dd className="text-xl font-semibold tabular-nums">
-                ${amount.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}.00
+                {formatUsd(amount)}
               </dd>
             </div>
             <div>
@@ -273,29 +340,35 @@ function DepositDialog({ disabled }: { disabled: boolean }) {
             </div>
           </dl>
         ) : (
-          <form id="deposit-entry" onSubmit={review}>
+          <form id={formId} onSubmit={review}>
             <FieldGroup>
               <Field data-invalid={Boolean(error)}>
-                <FieldLabel htmlFor="deposit-amount">Amount</FieldLabel>
+                <FieldLabel htmlFor={`${noun}-amount`}>Amount</FieldLabel>
                 <InputGroup>
                   <InputGroupAddon>
                     <DollarSign aria-hidden="true" />
                   </InputGroupAddon>
                   <InputGroupInput
-                    id="deposit-amount"
+                    id={`${noun}-amount`}
                     name="amount"
                     type="text"
-                    inputMode="numeric"
+                    inputMode={withdrawal ? "decimal" : "numeric"}
                     autoComplete="off"
                     autoFocus
                     value={amount}
                     aria-invalid={Boolean(error)}
-                    aria-describedby="deposit-help"
+                    aria-describedby={`${noun}-help`}
                     onChange={(event) => setAmount(event.target.value)}
                   />
                 </InputGroup>
-                <FieldDescription id="deposit-help" className="text-xs">
-                  Funds are transferring from:
+                <FieldDescription id={`${noun}-help`} className="text-xs">
+                  {withdrawal && withdrawableCash !== undefined ? (
+                    <>
+                      Available to withdraw: <Money value={withdrawableCash} />
+                      <br />
+                    </>
+                  ) : null}
+                  Funds are transferring {withdrawal ? "to" : "from"}:
                   <br />
                   Chase Checking •••• 4242
                 </FieldDescription>
@@ -330,12 +403,14 @@ function DepositDialog({ disabled }: { disabled: boolean }) {
                 Back
               </Button>
               <Button type="button" disabled={pending} onClick={confirm}>
-                {pending ? "Submitting deposit…" : "Confirm deposit"}
+                {pending
+                  ? `Submitting ${noun}…`
+                  : `Confirm ${noun}`}
               </Button>
             </>
           ) : (
-            <Button type="submit" form="deposit-entry">
-              Review deposit
+            <Button type="submit" form={formId}>
+              Review {noun}
             </Button>
           )}
         </DialogFooter>
@@ -465,10 +540,18 @@ export function FundingOverview({ snapshot }: { snapshot: FundingSnapshot }) {
           ) : null}
           {snapshot.fundingSource.state === "ready" ? (
             <div className="flex gap-2">
-              <DepositDialog disabled={snapshot.transfersBlocked !== false} />
-              <Button type="button" variant="outline" disabled>
-                Withdraw
-              </Button>
+              <TransferDialog
+                kind="deposit"
+                disabled={snapshot.transfersBlocked !== false}
+              />
+              <TransferDialog
+                kind="withdrawal"
+                disabled={
+                  snapshot.transfersBlocked !== false ||
+                  snapshot.balances.withdrawableCash === null
+                }
+                withdrawableCash={snapshot.balances.withdrawableCash}
+              />
             </div>
           ) : null}
         </CardContent>

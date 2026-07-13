@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   depositFunding: vi.fn(),
   prepareFunding: vi.fn(),
   refresh: vi.fn(),
+  withdrawFunding: vi.fn(),
 }))
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: mocks.refresh }),
@@ -16,9 +17,11 @@ vi.mock("next/navigation", () => ({
 vi.mock("../../app/app/funding/actions", () => ({
   depositFunding: mocks.depositFunding,
   prepareFunding: mocks.prepareFunding,
+  withdrawFunding: mocks.withdrawFunding,
 }))
 
 beforeEach(() => {
+  mocks.refresh.mockReset()
   mocks.depositFunding.mockReset().mockResolvedValue({
     status: "success",
     message: "Deposit submitted.",
@@ -26,6 +29,10 @@ beforeEach(() => {
   mocks.prepareFunding.mockReset().mockResolvedValue({
     status: "success",
     message: "Funding Source prepared.",
+  })
+  mocks.withdrawFunding.mockReset().mockResolvedValue({
+    status: "success",
+    message: "Withdrawal submitted.",
   })
 })
 
@@ -344,6 +351,18 @@ test("reviews the whole-dollar amount and requires explicit confirmation", async
     .toBeVisible()
 })
 
+test("reviews large deposit strings without floating-point rounding", async () => {
+  const screen = await render(<FundingOverview snapshot={snapshot} />)
+  await screen.getByRole("button", { name: "Add funds" }).click()
+  await screen.getByLabelText("Amount").fill("9007199254740993")
+  await userEvent.tab()
+  await userEvent.keyboard("{Enter}")
+
+  await expect
+    .element(screen.getByText("$9,007,199,254,740,993.00", { exact: true }))
+    .toBeVisible()
+})
+
 test("disables confirmation while pending so it cannot dispatch twice", async () => {
   let finish!: (value: { status: "success"; message: string }) => void
   mocks.depositFunding.mockImplementation(
@@ -394,6 +413,160 @@ test.each([
   },
 )
 
+test("opens the withdrawal dialog from the keyboard and shows current availability", async () => {
+  const screen = await render(<FundingOverview snapshot={snapshot} />)
+  const withdraw = screen.getByRole("button", { name: "Withdraw" })
+
+  await userEvent.tab()
+  await userEvent.tab()
+  await userEvent.tab()
+  await expect.element(withdraw).toHaveFocus()
+  await userEvent.keyboard("{Enter}")
+
+  await expect
+    .element(screen.getByRole("heading", { name: "Withdraw funds" }))
+    .toBeVisible()
+  await expect.element(screen.getByLabelText("Amount")).toHaveFocus()
+  expect(screen.getByRole("textbox").all()).toHaveLength(1)
+  await expect
+    .element(screen.getByText("Available to withdraw: $9,340.00"))
+    .toBeVisible()
+  await expect
+    .element(screen.getByText("Chase Checking •••• 4242").nth(1))
+    .toBeVisible()
+
+  await userEvent.keyboard("{Escape}")
+  await expect.element(withdraw).toHaveFocus()
+})
+
+test.each(["0", "-1", "1.000", ".50", "abc"])(
+  "rejects invalid withdrawal amount %j before review",
+  async (amount) => {
+    const screen = await render(<FundingOverview snapshot={snapshot} />)
+    await screen.getByRole("button", { name: "Withdraw" }).click()
+    await screen.getByLabelText("Amount").fill(amount)
+    await userEvent.tab()
+    await userEvent.keyboard("{Enter}")
+
+    await expect
+      .element(screen.getByRole("alert"))
+      .toHaveTextContent(
+        "Enter a positive amount with no more than two decimal places.",
+      )
+    expect(mocks.withdrawFunding).not.toHaveBeenCalled()
+  },
+)
+
+test("rejects a withdrawal above displayed Withdrawable Cash", async () => {
+  const screen = await render(<FundingOverview snapshot={snapshot} />)
+  await screen.getByRole("button", { name: "Withdraw" }).click()
+  await screen.getByLabelText("Amount").fill("9340.01")
+  await userEvent.tab()
+  await userEvent.keyboard("{Enter}")
+
+  await expect
+    .element(screen.getByRole("alert"))
+    .toHaveTextContent("Amount exceeds current Withdrawable Cash.")
+  expect(mocks.withdrawFunding).not.toHaveBeenCalled()
+})
+
+test("reviews a cent withdrawal and requires explicit confirmation", async () => {
+  const screen = await render(<FundingOverview snapshot={snapshot} />)
+  await screen.getByRole("button", { name: "Withdraw" }).click()
+  await screen.getByLabelText("Amount").fill("25.50")
+  await userEvent.tab()
+  await userEvent.keyboard("{Enter}")
+
+  await expect
+    .element(screen.getByRole("heading", { name: "Review withdrawal" }))
+    .toBeVisible()
+  await expect.element(screen.getByText("$25.50", { exact: true })).toBeVisible()
+  expect(mocks.withdrawFunding).not.toHaveBeenCalled()
+
+  await userEvent.tab()
+  await userEvent.tab()
+  await userEvent.keyboard("{Enter}")
+
+  expect(mocks.withdrawFunding).toHaveBeenCalledOnce()
+  const submitted = mocks.withdrawFunding.mock.calls[0][1] as FormData
+  expect(submitted.get("amount")).toBe("25.50")
+  await expect
+    .element(screen.getByRole("heading", { name: "Withdrawal submitted" }))
+    .toBeVisible()
+  await expect
+    .element(screen.getByRole("status"))
+    .toHaveTextContent("Withdrawal submitted.")
+})
+
+test("prevents duplicate withdrawal confirmation while pending", async () => {
+  let finish!: (value: { status: "success"; message: string }) => void
+  mocks.withdrawFunding.mockImplementation(
+    () => new Promise((resolve) => (finish = resolve)),
+  )
+  const screen = await render(<FundingOverview snapshot={snapshot} />)
+  await screen.getByRole("button", { name: "Withdraw" }).click()
+  await screen.getByLabelText("Amount").fill("25.50")
+  await userEvent.tab()
+  await userEvent.keyboard("{Enter}")
+  await userEvent.tab()
+  await userEvent.tab()
+  await userEvent.keyboard("{Enter}")
+
+  await expect
+    .element(screen.getByRole("button", { name: "Submitting withdrawal…" }))
+    .toBeDisabled()
+  expect(mocks.withdrawFunding).toHaveBeenCalledOnce()
+  finish({ status: "success", message: "Withdrawal submitted." })
+  await expect
+    .element(screen.getByRole("heading", { name: "Withdrawal submitted" }))
+    .toBeVisible()
+})
+
+test.each([
+  ["error", "Withdrawals are not permitted for this Brokerage Account."],
+  [
+    "unknown",
+    "Withdrawal outcome is unknown. Check recent Transfers before trying again.",
+  ],
+] as const)(
+  "announces a %s withdrawal outcome without optimistic changes",
+  async (status, message) => {
+    mocks.withdrawFunding.mockResolvedValue({ status, message })
+    const screen = await render(<FundingOverview snapshot={snapshot} />)
+    await screen.getByRole("button", { name: "Withdraw" }).click()
+    await screen.getByLabelText("Amount").fill("25.50")
+    await userEvent.tab()
+    await userEvent.keyboard("{Enter}")
+    await userEvent.tab()
+    await userEvent.tab()
+    await userEvent.keyboard("{Enter}")
+
+    await expect.element(screen.getByRole("alert")).toHaveTextContent(message)
+    await expect.element(screen.getByText("$10,340.00")).toBeVisible()
+    await expect.element(screen.getByText("-$750.00")).toBeVisible()
+  },
+)
+
+test("treats a rejected withdrawal action as unknown and refreshes history once", async () => {
+  mocks.withdrawFunding.mockRejectedValue(new TypeError("connection lost"))
+  const screen = await render(<FundingOverview snapshot={snapshot} />)
+  await screen.getByRole("button", { name: "Withdraw" }).click()
+  await screen.getByLabelText("Amount").fill("25.50")
+  await userEvent.tab()
+  await userEvent.keyboard("{Enter}")
+  await userEvent.tab()
+  await userEvent.tab()
+  await userEvent.keyboard("{Enter}")
+
+  await expect
+    .element(screen.getByRole("alert"))
+    .toHaveTextContent(
+      "Withdrawal outcome is unknown. Check recent Transfers before trying again.",
+    )
+  expect(mocks.refresh).toHaveBeenCalledOnce()
+  expect(mocks.withdrawFunding).toHaveBeenCalledOnce()
+})
+
 test("disables deposits while the Brokerage Account blocks Transfers", async () => {
   const screen = await render(
     <FundingOverview snapshot={{ ...snapshot, transfersBlocked: true }} />,
@@ -406,6 +579,9 @@ test("disables deposits while the Brokerage Account blocks Transfers", async () 
     .toBeVisible()
   await expect
     .element(screen.getByRole("button", { name: "Add funds" }))
+    .toBeDisabled()
+  await expect
+    .element(screen.getByRole("button", { name: "Withdraw" }))
     .toBeDisabled()
 })
 
