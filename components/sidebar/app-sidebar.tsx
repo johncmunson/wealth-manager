@@ -8,7 +8,6 @@ import { ChevronsUpDown, Gem, LogOut, Search, Settings } from "lucide-react"
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { authClient } from "@/lib/auth-client"
-import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,7 +18,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Label } from "@/components/ui/label"
+import { OrderDialog } from "@/components/order/order-dialog"
 import { appNavItems, isAppRouteActive } from "@/lib/app-navigation"
+import type { OrderSnapshot } from "@/lib/alpaca/orders"
 import {
   Sidebar,
   SidebarContent,
@@ -35,7 +36,11 @@ import {
   SidebarSeparator,
 } from "@/components/ui/sidebar"
 
-export function AppSidebar() {
+export function AppSidebar({
+  readOrderSnapshotAction,
+}: {
+  readOrderSnapshotAction: () => Promise<OrderSnapshot>
+}) {
   const pathname = usePathname()
   const router = useRouter()
   const [isSigningOut, setIsSigningOut] = useState(false)
@@ -70,7 +75,7 @@ export function AppSidebar() {
               className="h-12 pl-10 text-base"
             />
           </div>
-          <Button className="h-12 w-full text-base font-bold">Trade</Button>
+          <OrderDialog readOrderSnapshotAction={readOrderSnapshotAction} />
         </div>
       </SidebarHeader>
 
