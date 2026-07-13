@@ -4,7 +4,7 @@
 /components/ui
 pnpm-lock.yaml
 /context
-/_context
+/context
 /vendor
 /db/migrations
 /.pi
