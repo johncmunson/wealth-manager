@@ -13,6 +13,14 @@ The following things are explicitly out of scope and not supported...
 
 > At this time, hardened production topics like regulatory compliance, document submissions and approvals, or things of that nature are not a concern. It can be assumed that the app will remain in sandbox mode (using the fully-disclosed setup) for quite some time.
 
+## Sandbox Account Seeding
+
+Configure `ALPACA_SANDBOX_SWEEP_ACCOUNT_ID` in `.env.local`, then move synthetic cash from that Sweep Account to a User's linked Brokerage Account:
+
+```sh
+pnpm account:seed user@example.com 50.00
+```
+
 ## Main Product UI Surfaces
 
 - **Portfolio** - Current portfolio state, including value, value over time, strategy alignment, holdings, and recent activity.

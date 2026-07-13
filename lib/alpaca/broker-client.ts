@@ -26,10 +26,7 @@ export interface CreateAlpacaBrokerClientOptions {
 }
 
 export interface AlpacaBrokerClient {
-  request(
-    path: string,
-    options: AlpacaBrokerRequestOptions,
-  ): Promise<Response>
+  request(path: string, options: AlpacaBrokerRequestOptions): Promise<Response>
 }
 
 export class AlpacaBrokerRequestError extends Error {
@@ -45,15 +42,29 @@ export class AlpacaBrokerAuthenticationError extends Error {
   }
 }
 
-function safeLog(
-  logger: AlpacaLogger,
-  event: Parameters<AlpacaLogger>[0],
-) {
+function safeLog(logger: AlpacaLogger, event: Parameters<AlpacaLogger>[0]) {
   try {
     logger(event)
   } catch {
     // Observability must not affect Broker API behavior.
   }
+}
+
+function getAccessToken(
+  tokenService: AlpacaTokenService,
+  signal?: AbortSignal | null,
+) {
+  const token = tokenService.getAccessToken()
+  if (!signal) return token
+  signal.throwIfAborted()
+
+  return new Promise<string>((resolve, reject) => {
+    const abort = () => reject(signal.reason)
+    signal.addEventListener("abort", abort, { once: true })
+    token
+      .then(resolve, reject)
+      .finally(() => signal.removeEventListener("abort", abort))
+  })
 }
 
 export function createAlpacaBrokerClient({
@@ -94,9 +105,10 @@ export function createAlpacaBrokerClient({
         )
       }
 
-      let accessToken = await tokenService.getAccessToken()
+      let accessToken = await getAccessToken(tokenService, requestInit.signal)
 
       for (let attempt = 0; attempt < 2; attempt += 1) {
+        requestInit.signal?.throwIfAborted()
         headers.set("authorization", `Bearer ${accessToken}`)
         const startedAt = now()
         const response = await fetchImplementation(url, {
@@ -136,7 +148,7 @@ export function createAlpacaBrokerClient({
         } catch {
           // A consumed/closed error body does not prevent a safe replay.
         }
-        accessToken = await tokenService.getAccessToken()
+        accessToken = await getAccessToken(tokenService, requestInit.signal)
       }
 
       throw new AlpacaBrokerAuthenticationError()

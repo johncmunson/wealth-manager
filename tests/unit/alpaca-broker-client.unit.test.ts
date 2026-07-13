@@ -48,7 +48,8 @@ describe("Alpaca Broker client", () => {
     })
 
     expect(response.status).toBe(200)
-    const [url] = (fetchImplementation as ReturnType<typeof vi.fn>).mock.calls[0]
+    const [url] = (fetchImplementation as ReturnType<typeof vi.fn>).mock
+      .calls[0]
     expect(String(url)).toBe(
       "https://broker-api.sandbox.alpaca.markets/v1/accounts?status=active",
     )
@@ -132,6 +133,35 @@ describe("Alpaca Broker client", () => {
         "authorization",
       ),
     ).toBe("Bearer TOKEN_TWO")
+  })
+
+  it("stops waiting for authentication when the caller aborts", async () => {
+    let releaseToken: (token: string) => void = () => {}
+    const pendingToken = new Promise<string>((resolve) => {
+      releaseToken = resolve
+    })
+    const tokens: AlpacaTokenService = {
+      getAccessToken: vi.fn(() => pendingToken),
+      invalidateIfCurrent: vi.fn(),
+    }
+    const fetchImplementation = vi.fn()
+    const client = createAlpacaBrokerClient({
+      fetch: fetchImplementation as typeof fetch,
+      tokenService: tokens,
+      logger: () => {},
+    })
+    const controller = new AbortController()
+
+    const request = client.request("/v1/accounts", {
+      signal: controller.signal,
+      authenticationReplay: "safe-once",
+    })
+    controller.abort(new DOMException("Timed out", "TimeoutError"))
+
+    await expect(request).rejects.toMatchObject({ name: "TimeoutError" })
+    releaseToken("TOKEN")
+    await pendingToken
+    expect(fetchImplementation).not.toHaveBeenCalled()
   })
 
   it("does not make a second replay when the replay also returns 401", async () => {
