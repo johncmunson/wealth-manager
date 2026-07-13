@@ -94,6 +94,14 @@ _Avoid_: Banking, transfer
 The synthetic sandbox bank account connected to a Brokerage Account for deposits and withdrawals. It is represented to every User as “Chase Checking •••• 4242” and is not a real linked bank account.
 _Avoid_: Linked bank, bank account
 
+**Account Seeding**:
+Internally adding synthetic cash to a Brokerage Account for demos and testing. Account Seeding is not a User-initiated Transfer.
+_Avoid_: Deposit, funding, transfer
+
+**Sweep Account**:
+The sandbox firm-owned account whose synthetic cash may be moved into Brokerage Accounts for Account Seeding.
+_Avoid_: Funding Source, bank account, Brokerage Account
+
 **Buying Power**:
 The amount currently available in a Brokerage Account for placing Orders. It may differ from cash that can be withdrawn.
 _Avoid_: Available cash, balance
